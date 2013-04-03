@@ -20,13 +20,17 @@
 #define VI_CRC_INI      0x41154115  //pocatecni hodnota vypoctu CRC
 
 /*
- * parser a dispatcher datove a textove komunikace
+ * parser a dispatcher datovych paketu
  * resi jak stranu serveru (odesilace pozadavku) i klienta (vykonava pozadavky)
  * resi preposilani paketu a cekani na potvrzeni (pokud jde o potrvzovane povely)
  * jde o ciste abstraktni tridu tvorici obecneho predka naslednym implementacim
  * zavislym na konkretnim prenosovem mediu (typ. tcp)
  * uzce navazane na vi_ex_def kde je popsana struktura paketu a rozsah podporovanych povelu
+ * podporuje cekani na konkretni paket
+ * vsechny rx pakety musi byt vycteny applikaci jinak budou po tichosti prepsane
  */
+ 
+ 
 
 class vi_ex_io
 {
@@ -44,8 +48,7 @@ private:
     static u32 vi_ex_io_n;  //jen pomocny citac "referenci"
     
     volatile bool reading;  //zamyka vycitani fronty (mutex by byl lepsi, ale to az ve wrapperu)
-    volatile u32 sess_id_tx;  //inkremenralni session id - zvedame s kazdym paketem
-    volatile u32 sess_id_rx;  //id ktere ocekavame nejdrive; normalne stejne s tx jenom pokud cekame na vic oaketu na raz rtak zaostava
+    volatile u32 sess_id;  //inkremenralni session id - zvedame s kazdym paketem; se stejnym id pak cekame odpoved
 
     char mark[VI_MARKER_SZ+1];  //tvori zaroven marker pro pakety unikatni pro P2P spojeni
     
@@ -97,7 +100,7 @@ public:
     }
 
     //prednastavi binarni paket
-    t_vi_exch_dgram *preparetx(t_vi_exch_dgram *d, t_vi_exch_type t, u32 size = 0, u32 sess_id = 0){
+    t_vi_exch_dgram *preparetx(t_vi_exch_dgram *d, t_vi_exch_type t, u32 size = 0, u32 _sess_id = 0){
                 
         if(NULL == d) //!!!pokud je d == NULL tak ho alokuje, app si ho pak musi uvolnit
             if(NULL == (d = (t_vi_exch_dgram *) new u8[VI_HLEN() + size]))
@@ -105,7 +108,7 @@ public:
 
         memcpy(d->h.marker, mark, VI_MARKER_SZ);
         d->h.type = t;
-        d->h.sess_id = (sess_id) ? sess_id : (t >= VI_I) ? sess_id_tx : ++sess_id_tx;  //tx inc jen pokud je paket potvrzovany
+        d->h.sess_id = (_sess_id) ? _sess_id : (t >= VI_I) ? sess_id : ++sess_id;  //tx inc jen pokud je paket potvrzovany
         d->h.crc = VI_CRC_INI;
         d->h.size = size;
         return d;
@@ -120,7 +123,7 @@ public:
 
         memcpy(d->h.marker, mark, VI_MARKER_SZ);
         d->h.type = t;
-        d->h.sess_id = 0;
+        d->h.sess_id = 0;  //nevime a asi je nam to jedno - to do - asi by sla vymyslet vyssi logika; nepr kontrola na konzistenci, apod...
         d->h.crc = VI_CRC_INI;
         d->h.size = size;        
         return d;

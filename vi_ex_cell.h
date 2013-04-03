@@ -18,7 +18,8 @@ class vi_ex_cell : public vi_ex_hid
 {
 private:
     t_vi_param *p_cap;  //zaloha binarniho paketu s capab
-    std::ostream *tt_o;  //terminal kam padaji tracy
+    std::iostream *tt_io;  //terminal kde ctem prikazy a kam je davame
+    std::ostream *tt_trace;  //tracovaci vystup
 
     //low-level hodnota parametru vyctena jako pole
     template <typedef T> std::vector<T> param(t_vi_param_mn name, t_vi_param_flags f){
@@ -47,6 +48,16 @@ private:
     }
 
 protected:
+
+    //tracy doplnene o timestamp
+	virtual void debug(const char *msg){ 
+	
+	    time_t rawtime; time( &rawtime );
+		struct tm * timeinfo = localtime ( &rawtime );
+		tt_trace << asctime (timeinfo);	
+		tt_trace << msg;
+	}  
+
     //potrebuji udelat hook na capab. a discovery paket
     virtual void callback(vi_ex_io::t_vi_io_r event){
 
@@ -163,7 +174,12 @@ public:
     }
 
     //pokud je io typu hid pak muzem vypisovat tracy na terminal
-    vi_ex_cell(std::ostream *_tt_io):tt_io(_tt_io){ p_cap = NULL; }
+    vi_ex_cell(std::iostream *_tt_io, std::ostream *_tt_t = &std::cout):
+		tt_io(_tt_io), tt_trace(_tt_t){ 
+	
+		p_cap = NULL;
+	}
+	
     virtual ~vi_ex_cell();
 };
 

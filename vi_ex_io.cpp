@@ -13,8 +13,7 @@
 vi_ex_io::vi_ex_io(void)  //univerzalni rezim defaultne
 {
     reading = 0;
-    sess_id_tx = 0;
-    sess_id_rx = 0;
+    sess_id = 0;
     vi_ex_io_n++;
 
     //vyrobime alespon nejakou identifikaci
@@ -170,11 +169,9 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
         if(VI_IO_OK == parser(offs)){
 
             rdBuf->get(0, (u8 *)&dg, sizeof(dg.h));   //nakopirujem head
-            if((VI_ACK & dg.h.type) && (sess_id_rx == dg.h.sess_id)){   //dostali jsme potvrzeni na nas paket?
+            if((VI_ACK & dg.h.type) && (d->h.sess_id == dg.h.sess_id)){   //dostali jsme potvrzeni na nas paket?
 
                 wrBuf->read(0, n);   //paket potrvzen
-                sess_id_rx++;  //cekame na dalsi v poradi
-
                 VI_DMSG("rx ack / no%d", dg.h.sess_id);
                 return VI_IO_OK;
             } else {
@@ -222,9 +219,9 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                 if((dg.h.type &= ~VI_ACK) >= VI_I){  //paket s potrvzenim?
 
                     t_vi_exch_dgram ack;
-                    preparetx(&ack, VI_ACK, 0, (sess_id_tx = d->h.sess_id));
+                    preparetx(&ack, VI_ACK, 0, d->h.sess_id);
                     write((u8 *)&ack, sizeof(ack.h));  //odeslem hned potvrzovaci paket
-                    VI_DMSG("tx ack / no%d", sess_id_tx); //!!s id puvodniho paketu
+                    VI_DMSG("tx ack / no%d", d->h.sess_id); //!!s id puvodniho paketu
                 }
 #endif // VI_LINK_ACK
 
