@@ -21,9 +21,9 @@ private:
     std::ostream *tt_o;  //terminal kam padaji tracy
 
     //low-level hodnota parametru vyctena jako pole
-    template <typedef T> std::list<T> param(std::string name, t_vi_param_flags f){
+    template <typedef T> std::vector<T> param(t_vi_param_mn name, t_vi_param_flags f){
 
-        std::list<T> v;
+        std::vector<T> v;
         if(!p_cap) return v;
 
         t_vi_param_stream reader(p_cap);
@@ -32,7 +32,7 @@ private:
             int n; _tp = reader.isvalid(&n); //vime ze je v poradku - jen chceme velikost
             T *tv = new T[n];
             n = reader.readnext<T>(name, &tv, n);
-            for(int i=0; i<n; i++) v.insert(tv[i]);
+            for(int i=0; i<n; i++) v.push_back(tv[i]);
             delete tv;
             if(tp) tp = _tp;
         }
@@ -40,9 +40,9 @@ private:
     }
 
     //low-level hodnota parametru vyctena jako pole
-    template <typedef T> T param(std::string name, t_vi_param_flags f){
+    template <typedef T> T param(t_vi_param_mn name, t_vi_param_flags f){
 
-        std::list<T> v = param(name, f);
+        std::vector<T> v = param(name, f);
         return (v.size()) ? v[0] : T();
     }
 
@@ -62,6 +62,9 @@ protected:
             } else if(dg.h.type == VI_DISCOVERY){
 
                 //to do - vygenerujem si marker na toho s kym chceme mluvit
+            } else if(dg.h.type == VI_BULK){
+                
+                //to do - vsechny prichozi pakety BULK formatovat do tracovaciho int.
             }
         }
 
@@ -70,13 +73,13 @@ protected:
 
 public:
 
-    template <typedef T> std::list<T> def(std::string name){ //defaultni hodnota parametru pokud ocekavame pole
+    template <typedef T> std::vector<T> def(t_vi_param_mn name){ //defaultni hodnota parametru pokud ocekavame pole
 
         return param(name, VI_TYPE_P_DEF);
     }
 
     //vraci 3 hodnoty v poradi nazvu fce pokud je polozka tohoto typu jinak 0
-    template <typedef T> std::array<T, 3> minmaxstep(std::string name){
+    template <typedef T> std::array<T, 3> minmaxstep(t_vi_param_mn name){
 
         std::array<T, 3> v;
         v[0] = param(name, VI_TYPE_P_MIN);
@@ -86,7 +89,7 @@ public:
     }
 
     //vraci seznam hodnot menu pokud je polozka vyctova
-    template <typedef T> std::set<T> menulist(std::string name){
+    template <typedef T> std::set<T> menudef(t_vi_param_mn name){
 
         t_vi_param_flags f = VI_TYPE_P_MIN;
         std::list<T> tv(1), v;
@@ -98,7 +101,7 @@ public:
     }
 
     //vraci seznam stringu parametru
-    std::set<std::string> stringlist(std::string name){
+    std::set<std::string> stringdef(t_vi_param_mn name){
 
         t_vi_param_flags f = VI_TYPE_P_MIN;
         std::list<std::string> v;
@@ -114,32 +117,39 @@ public:
         return v;
     }
 
-    //zmena hodnoty parametru
-    template <typedef T> std::list<T> set(std::string name, std::list<T> &v){
+    //zmena hodnoty parametru a vycrteni (nebo jen vycteni pokud nic neposilame)
+    template <typedef T> std::vector<T> set(t_vi_param_mn name, std::vector<T> &v){
 
-        u8 *vals = t_vi_param
-        t_vi_param_stream writer(p_cap);
-        if(reader.setpos(name, f)){
+        std::vector<T> confr;
+        std::vector<T> d = def(name); //vyctem defaultni prametr kvuli velikosti        
+        int N = (v.size() > d.size()) ? v.size() : d.size();  //berem vetsi
 
-            int n; _tp = reader.isvalid(&n); //vime ze je v poradku - jen chceme velikost
-            T *tv = new T[n];
-            n = reader.readnext<T>(name, &tv, n);
-            for(int i=0; i<n; i++) v.insert(tv[i]);
-            delete tv;
-            if(tp) tp = _tp;
+        T confv[N]; for(int i = 0; i != v.size(); i++) confv[i] = v[i];  //z vekotru c-pole
+        t_vi_exch_dgram *confs = preparetx(NULL, VI_I_SETUP_SET, VIEX_PARAM_LEN(T, v.size()));  //paket si pripravime
+        t_vi_param_stream writer(confs->setup, confs->h.size); //priparavime si zapisovac
+        writer.append<T>(name, confv, v.size());  //a do paketu vrazime tam to pole
+
+        if(submit(confs) == vi_ex_io::VI_IO_OK){       
+
+            //pripravime si ten samy paket, neprijmem ovsem vic nez jsme poslali!!!
+            preparerx(confs, VI_I_SETUP_SET, VIEX_PARAM_LEN(T, v.size()));
+            if(receive(confs) != vi_ex_io::VI_IO_OK){
+
+                t_vi_param_stream reader(confs->setup, confs->h.size); //priparavime si vycitac parametru
+                N = writer.readnext<T>(name, confv, N);  //mame neco?
+                for(int i=0; i<N; i++) confr.push_back(conv[i]);  //preklopime
+            }
         }
-        return v;
-
-        t_vi_exch_dgram *confs = preparetx(NULL, VI_I_SETUP_SET, u32 size = 0, u32 sess_id = 0)
-        if(vi_ex_hid::submit(name) == vi_ex_io::VI_IO_OK)  //prelozime a poslem binarne
-            if(receive(rcv) == vi_ex_io::VI_IO_OK) //pockame si na odpoved a tu hned prelozime do cloveciny
-                return std::string(rcv); //vratime
+        
+        delete confs;
+        return confr; //vratime
     }
 
     //cteni konfigurace
-    template <typedef T> std::list<T> get(std::string name){
+    template <typedef T> std::vector<T> get(t_vi_param_mn name){
 
-        vi_ex_io::submit();
+        std::vector<T> nullv; 
+        return set(nullv);
     }
 
     std::string command(std::string ord){

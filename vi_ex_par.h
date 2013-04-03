@@ -37,15 +37,21 @@ typedef enum { //datove typy nastaveni; oprasknute z enum v4l2_ctrl_type
 
 #define VIEX_PARAM_NAME_SIZE    32
 
+typedef char (*t_vi_param_mn)[VIEX_PARAM_NAME_SIZE];
+
 //generalizovany prvek ze seznamu prametru
 typedef struct {
 
-    char name[VIEX_PARAM_NAME_SIZE];
+    t_vi_param_mn name;
     t_vi_param_type type;
     t_vi_param_flags def_range;
     u32 length;
     u8 v[1];
 } __attribute__ ((packed)) t_vi_param;
+
+
+#define VIEX_PARAM_HEAD() (sizeof(t_vi_param)-1)        //delka hlavicky - stale stejna
+#define VIEX_PARAM_LEN(T, N) (sizeof(t_vi_param)-1+sizeof(T)*N)  //celkova delka jednoho param
 
 //zapis a cteni nad streamem parametru
 class t_vi_param_stream {
@@ -91,7 +97,7 @@ public:
             if(0 == strcmp(it->name, name))
                 return it->type;
             else
-                it += sizeof(t_vi_param) - 1 + it->length;
+                it += VIEX_PARAM_HEAD() + it->length;
 
         return VI_TYPE_UNKNOWN;
     }
@@ -126,7 +132,7 @@ public:
             *tmp++ = *val++; //diky attr packed budu muset stejne mozna kopirovat
 
         it->length *= sizeof(T);
-        u32 sh = sizeof(t_vi_param) - 1 + it->length;
+        u32 sh = VIEX_PARAM_HEAD() + it->length;
         it += sh;
 
         return (it->length / sizeof(T));
@@ -157,7 +163,7 @@ public:
         strcpy(name, it->name);  //kontrola vzhledem k omezeni param fce netreba
         if(f) *f = it->def_range;
 
-        u32 sh = sizeof(t_vi_param) - 1 + it->length;
+        u32 sh = VIEX_PARAM_HEAD() + it->length;
         it += sh;
 
         return i;

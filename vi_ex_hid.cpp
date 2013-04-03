@@ -68,7 +68,7 @@ int vi_ex_hid::cf2hi(t_vi_param *p, u32 n, char *cmd, int len){
         for(int i=0; (1 == sscanf(cmd, FRMSTR, &v[i])) && (i < n); i++)\
             if((NULL == (cmd = strchr(cmd, ','))) || (cmd >= end))\
                 break;\
-    return io.append<TYPE>(&name, v, n)*sizeof(TYPE)+sizeof(t_vi_param)-1;\
+    return VIEX_PARAM_LEN(TYPE, io.append<TYPE>(&name, v, n));\
     }\
 
 //z textoveho vstupu vycte nastaneni parametru - omezeni na jeden!
