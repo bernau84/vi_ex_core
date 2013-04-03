@@ -12,6 +12,8 @@
 
 //prijmnejsi sprava capabilities
 //a zakladnich fukci spolecnych vsem io
+//podpora high level get, set configu
+//human readable text terminal
 class vi_ex_cell : public vi_ex_hid
 {
 private:
