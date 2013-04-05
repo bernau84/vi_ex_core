@@ -1,0 +1,52 @@
+
+        /* time & date
+        time_t rawtime; time( &rawtime );
+        struct tm *timeinfo = localtime ( &rawtime );  //ukazatel na jakousi vnitrni strukturu; v prikladehc neuvolnuji
+        tt_trace << asctime (timeinfo); 
+        */
+
+
+//pozn. - aby nam to fungovalo i jako sbernicovy protokol
+//treba na seriove lince tak musime umet adresovat zarizeni
+//nejlepsi je pretizit fci pro zapis do spolecneho bufferu tak aby 
+//paket obalila jeste spec. sbernicovym markerem == adresou daneho nodu
+//pre-parser bude pracovat v pretizene fci read ktera ale nebude delat nic jineho nez
+//vycitat z bufferu podle pozice aktualich rx a tx indexu jednotlivych nodu
+//bude potreba jakysi multi-kruhovy buffer (ktery uz jsem nekde videl)
+
+
+
+//podpora cloveciny
+
+        // case VI_I_SNAP:        //zadost o obrazek, vycteni obrazku
+
+        //     if(d->h.size){
+
+        //         n = snprintf(cmd, len, " %dx%d %db",
+        //               d->bmp.bmiHeader.biWidth,
+        //               d->bmp.bmiHeader.biHeight,
+        //               d->bmp.bmiHeader.biBitCount);
+
+        //         len -= n; cmd += n;
+        //     }
+        // break;
+
+        // case VI_I_FLASH:       //nastaveni rezimu prisvetleni
+        // case VI_I_SHUTTER:     //nastaveni rezimu uzaverky (clony)
+
+        //     if(d->h.size){
+
+        //         n = snprintf(cmd, len, " %d", (u8)d->d[0]);
+        //         len -= n; cmd += n;
+        //     }
+        // break;
+
+
+        //parametry za kterymi cekame cislo
+        case VI_I_FLASH:       //nastaveni rezimu prisvetleni
+        case VI_I_SHUTTER:
+
+            snprintf(fstr, sizeof(fstr), "\%*s \%d"); //za paramterem cekame cislo
+            d->size = (1 == sscanf(cmd, fstr, &td)) ? 1 : 0;  //oscanujem a nastavime skutecnou delku
+            d->d[0] = (u8)td;
+        break;        

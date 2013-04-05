@@ -112,7 +112,8 @@ int vi_ex_hid::conv2hi(t_vi_exch_dgram *d, char *cmd, u32 len){
     u8 t = d->h.type & VI_ACK;
     switch(t){
 
-        case VI_DISCOVERY:	//vyzva a rekce na pritomnost zarizeni
+        case VI_ECHO_REQ:   //vyzva a rekce na pritomnost zarizeni
+        case VI_ECHO_REP:	//vyzva a rekce na pritomnost zarizeni
             //vyzvracet prilohu v ascii ven
 
             n = snprintf(cmd, len, " ");
@@ -126,7 +127,7 @@ int vi_ex_hid::conv2hi(t_vi_exch_dgram *d, char *cmd, u32 len){
             }
         break;
 
-        case VI_I:      //potvzovana data - pouzitelne jako echo
+        case VI_I:      //potvzovana data - test potvrzovaneho spojeni
         case VI_BULK: 	//nestrukturovana/nepotvrzovana data - jina
 
             for(int i=0; i<d->h.size; i++){
@@ -142,29 +143,6 @@ int vi_ex_hid::conv2hi(t_vi_exch_dgram *d, char *cmd, u32 len){
 
             n = cf2hi((t_vi_param *)d->d, d->h.size, cmd, len);
             len -= n; cmd += n;
-        break;
-
-        case VI_I_SNAP:        //zadost o obrazek, vycteni obrazku
-
-            if(d->h.size){
-
-                n = snprintf(cmd, len, " %dx%d %db",
-                      d->bmp.bmiHeader.biWidth,
-                      d->bmp.bmiHeader.biHeight,
-                      d->bmp.bmiHeader.biBitCount);
-
-                len -= n; cmd += n;
-            }
-        break;
-
-        case VI_I_FLASH:       //nastaveni rezimu prisvetleni
-        case VI_I_SHUTTER:     //nastaveni rezimu uzaverky (clony)
-
-            if(d->h.size){
-
-                n = snprintf(cmd, len, " %d", (u8)d->d[0]);
-                len -= n; cmd += n;
-            }
         break;
     }
 
@@ -198,16 +176,6 @@ int vi_ex_hid::conv2dt(char *cmd, t_vi_exch_dgram *d, u32 len){
 
             d->size = cf2hi((t_vi_param *)d->d, len, cmd, strlen(cmd));
         break;
-
-        //parametry za kterymi cekame cislo
-        case VI_I_FLASH:       //nastaveni rezimu prisvetleni
-        case VI_I_SHUTTER:
-
-            snprintf(fstr, sizeof(fstr), "\%*s \%d"); //za paramterem cekame cislo
-            d->size = (1 == sscanf(cmd, fstr, &td)) ? 1 : 0;  //oscanujem a nastavime skutecnou delku
-            d->d[0] = (u8)td;
-        break;
-
         default:
             d->size = 0;
         break;

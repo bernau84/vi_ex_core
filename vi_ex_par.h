@@ -24,7 +24,7 @@ typedef enum {
 } t_vi_param_type;
 
 //pokud je parametrem nejaka limitno hodnota pak pro vycet pouzivame MIN, RANGE2, RANGE3...atd
-//pokud potrebjem jen zadat min max a step tak nastavujem jen MIN, RANGE2, a MAX
+//pokud potrebujem jen zadat min max a step tak nastavujem jen MIN, RANGE2, a MAX
 typedef enum { //datove typy nastaveni; oprasknute z enum v4l2_ctrl_type
 
     VI_TYPE_P_VAL = 0,   //aktualni hodnota

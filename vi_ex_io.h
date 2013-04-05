@@ -15,8 +15,7 @@
 //pokud ano pak je kazdy paket potrzovan hned po prijeti do bufferu prazdnym ACk paketem
 //potrvzovani na aplikacni vrstve je zalezitost pridani ACK flagu do patricnych podpovedi
 
-#define VI_MARKER_BROADCAST 0x0
-#define VI_MARKER_SZ    4
+#define VI_NAME_SZ      (VI_MARKER_SZ + 1)
 #define VI_CRC_INI      0x41154115  //pocatecni hodnota vypoctu CRC
 
 /*
@@ -30,7 +29,8 @@
  * vsechny rx pakety musi byt vycteny applikaci jinak budou po tichosti prepsane
  */
  
- 
+typedef char (*t_vi_io_mn)[VI_NAME_SZ];
+typedef char (*t_vi_io_id)[VI_MARKER_SZ];
 
 class vi_ex_io
 {
@@ -45,12 +45,13 @@ public:
     };
 
 private:
-    static u32 vi_ex_io_n;  //jen pomocny citac "referenci"
+    static u32 cref;  //jen pomocny citac "referenci"
     
     volatile bool reading;  //zamyka vycitani fronty (mutex by byl lepsi, ale to az ve wrapperu)
     volatile u32 sess_id;  //inkremenralni session id - zvedame s kazdym paketem; se stejnym id pak cekame odpoved
 
-    char mark[VI_MARKER_SZ+1];  //tvori zaroven marker pro pakety unikatni pro P2P spojeni
+    t_vi_io_id mark;  //marker pro pakety unikatni pro P2P spojeni
+    t_vi_io_mn name;  //jednoznacny nazev prvku na sbernici
     
     u8 *imem;  //vnitrni buffery pro prijem a resend
     u8 *omem;
@@ -93,10 +94,10 @@ public:
 
     //kam to chcem posilat - ma smysl jen u sbernice
     //id musime obou stranama nastavit stejne a unikatni
-    //muzeme si pomoci napriklad makrem VI_BUS_UNIQUE_MARKER_GEN
-    void destination(char *id){
+    //muzeme si pomoci napriklad inline VI_BUS_UNIQUE_MARKER_GEN
+    void destination(t_vi_io_id p2pid){
 
-        snprintf(mark, sizeof(mark), "%s", id);
+        memcpy(mark, p2pid, sizeof(mark));
     }
 
     //prednastavi binarni paket
@@ -137,8 +138,10 @@ public:
         //zbytek se zahazuje; vetsinou ale vime jak dlouhy buffer ceka diky fci ispending nebo holt musime buffer nadimenzovat
         //na nejvetsi mozny paket na sbernici
 
-    vi_ex_io(char *_id = 0);
+    //pokud nezadam jmeno bude vytvoreno z poradoveho cisla
+    vi_ex_io(t_vi_io_mn _name = 0);
     virtual ~vi_ex_io();
 };
+
 
 #endif // VI_EX_IO_H
