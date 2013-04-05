@@ -10,9 +10,8 @@
     debug(msg); \
 }
 
+vi_ex_io::vi_ex_io(t_vi_io_mn _name, int iosize){
 
-vi_ex_io::vi_ex_io(t_vi_io_mn _name, circbuffer<u8> *_rdbuf, circbuffer<u8> *_wrbuf)  //univerzalni rezim defaultne
-{
     reading = 0;
     sess_id = 0;
     cref++;
@@ -24,14 +23,15 @@ vi_ex_io::vi_ex_io(t_vi_io_mn _name, circbuffer<u8> *_rdbuf, circbuffer<u8> *_wr
     memset(mark, 0, sizeof(mark)); // == prijimame vse
 
     omem = imem = NULL;
+    rdBuf = wrBuf = NULL;
 
-    if(_rdbuf != NULL) rdBuf = new circbuffer<u8>(*_rdbuf);  //kopirovaci konstruktor; bufer bude sdileny
-        else if((imem = (u8 *)calloc(VI_IO_I_BUF_SZ, 1))) VI_DMSG("input buf alocated");
-            else rdBuf = new circbuffer<u8>(imem, VI_IO_I_BUF_SZ);
+    if(!iosize) return; //buffery se dodefinuji jinde
 
-    if(_rdbuf != NULL) wrBuf = new circbuffer<u8>(*_wrbuf);
-        else if((omem = (u8 *)calloc(VI_IO_O_BUF_SZ, 1))) VI_DMSG("output buf alocated");
-            else wrBuf = new circbuffer<u8>(omem, VI_IO_O_BUF_SZ);
+    if((imem = (u8 *)calloc(iosize, 1))) VI_DMSG("input buf alocated");
+        else rdBuf = new circbuffer<u8>(imem, iosize);
+
+    if((omem = (u8 *)calloc(iosize, 1))) VI_DMSG("output buf alocated");
+        else wrBuf = new circbuffer<u8>(omem, iosize);    
 }
 
 vi_ex_io::~vi_ex_io(){

@@ -259,7 +259,7 @@ public:
 
                 case 0: {
 
-                    //udelame echo broadcast a zjistime jestli takove zarizeni posloucha a ceka
+                    //udelame echo a zjistime jestli takove zarizeni posloucha a ceka
                     t_vi_exch_dgram echo;
                     preparetx(&echo, VI_ECHO_REQ);  //paket si pripravime
                     memcpy(echo.h.marker, act_mark, sizeof(mark)); //udelame z toho broadcast nebo unicast podle act_mark

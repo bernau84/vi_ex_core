@@ -28,33 +28,15 @@ protected:
 
 public:	
 	
-	vi_ex_iom(t_vi_io_mn _name, circbuffer<u8> *_rdbuf, circbuffer<u8> *_wrbuf){ //univerzalni rezim defaultne
+	vi_ex_iom(t_vi_io_mn _name) : t_vi_io(_name, 0) {  //inicializace predka bez alokace bufferu
 
-	    reading = 0;
-	    sess_id = 0;
-	    cref++;
-
-	    if(_name == NULL) snprintf(name, sizeof(name), "%04d", cref);  //defaultni nazev je poradove cislo v systemu
-	        else strcpy(name, _name); //jinak berem co nam nuti
-
-	    //vyrobime alespon nejakou identifikaci
-	    memset(mark, _nam sizeof(mark)); // == prijimame vse
-
-	    if(_rdbuf != NULL) rdBuf = new circbuffer<u8>(*_rdbuf);  //kopirovaci konstruktor; bufer bude sdileny
-	        else if((imem = (u8 *)calloc(VI_IO_I_BUF_SZ, 1))) VI_DMSG("input buf alocated");
-	            else rdBuf = new circbuffer<u8>(imem, VI_IO_I_BUF_SZ);
-
-	    if(_rdbuf != NULL) wrBuf = new circbuffer<u8>(*_wrbuf);
-	        else if((omem = (u8 *)calloc(VI_IO_O_BUF_SZ, 1))) VI_DMSG("output buf alocated");
-	            else wrBuf = new circbuffer<u8>(omem, VI_IO_O_BUF_SZ);
+	    if(g_rdbuf) rdBuf = new circbuffer<u8>(*g_rdbuf);  //kopirovaci konstruktory se pouziji
+	    if(g_wrbuf) wrBuf = new circbuffer<u8>(*g_wrbuf);	    
 	}
 
-	virtual ~vi_ex_iom(){
+	virtual ~vi_ex_iom(){;}   //to do - nezabranuje virtual volani destruktoru v predkovi
 
-		//to do - nezabranuje virtual volani destruktoru v predkovi?
-	}
-}
-
+};
 
 
 #endif //VIEX_MIO

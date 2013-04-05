@@ -139,7 +139,7 @@ public:
         //na nejvetsi mozny paket na sbernici
 
     //pokud nezadam jmeno bude vytvoreno z poradoveho cisla
-    vi_ex_io(t_vi_io_mn _name = 0);
+    vi_ex_io(t_vi_io_mn _name = 0, int iosize = VI_IO_I_BUF_SZ);
     virtual ~vi_ex_io();
 };
 
