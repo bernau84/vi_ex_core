@@ -30,7 +30,6 @@
  */
  
 typedef char (*t_vi_io_mn)[VI_NAME_SZ];
-typedef char (*t_vi_io_id)[VI_MARKER_SZ];
 
 class vi_ex_io
 {
@@ -50,8 +49,8 @@ private:
     volatile bool reading;  //zamyka vycitani fronty (mutex by byl lepsi, ale to az ve wrapperu)
     volatile u32 sess_id;  //inkremenralni session id - zvedame s kazdym paketem; se stejnym id pak cekame odpoved
 
-    t_vi_io_id mark;  //marker pro pakety unikatni pro P2P spojeni
-    t_vi_io_mn name;  //jednoznacny nazev prvku na sbernici
+    char mark[VI_MARKER_SZ];  //marker pro pakety unikatni pro P2P spojeni
+    char name[VI_NAME_SZ];  //jednoznacny nazev prvku na sbernici
     
     u8 *imem;  //vnitrni buffery pro prijem a resend
     u8 *omem;

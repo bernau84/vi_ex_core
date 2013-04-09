@@ -41,7 +41,7 @@ public:
         return ret;
     }
 
-    vi_ex_hid():vi_ex_io(){;}
+    vi_ex_hid(t_vi_io_mn _name = 0):vi_ex_io(_name){;}
     virtual ~vi_ex_hid();
 
 };

@@ -55,7 +55,7 @@ int vi_ex_hid::cf2hi(t_vi_param *p, u32 n, char *cmd, int len){
         for(int i = 0; ((m += snprintf(&cmd[m], len-m, fv, v+szof*i)) < len) && (i < n); i++)
             m += snprintf(&cmd[m], len-m, ",");    //oddelovac hodnot pole
 
-        if(v) delete(v);
+        if(v) delete[] v;
         v = NULL;
     }
 }
