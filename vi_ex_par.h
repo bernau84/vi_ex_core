@@ -111,8 +111,9 @@ public:
         if(!name || !val) return -1; //fatal
         if(it >= end) return 0; //jsme na konci
 
+        it->def_range = f;
+
         //dyn. identifikace typu
-//        const type_info t_v = typeid(T); //jako reference bude rychlejsi porovnani (z prikladu...asi)
         if(typeid(T) == typeid(u8)) it->type = VI_TYPE_BYTE;
         else if(typeid(T) == typeid(char)) it->type = VI_TYPE_CHAR;
         else if(typeid(T) == typeid(int)) it->type = VI_TYPE_INTEGER;

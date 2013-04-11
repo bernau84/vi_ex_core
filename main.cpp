@@ -1,8 +1,9 @@
-#include <QtCore/QCoreApplication>
 #include "vi_ex_cell.h"
 #include <fstream>
 #include <ctime>
+#include <iostream>
 
+using namespace std;
 
 void vi_test_wait10ms(void);  //prototyp
 
@@ -27,9 +28,11 @@ protected:
         if(vi_ex_io::VI_IO_OK == event){
 
             char rcv[VIEX_HID_SP];  //pakety aby byly potvrzeny tak se musi vycist
-            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){
+            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){  //rx a prevvod do cloveciny
 
-                debug(rcv);  //vypis do debugovaho okna
+                char info[128];
+                snprintf(info, sizeof(info), "%s: rx cmd \"%s\"\r\n", name, rcv);  //vytisknem
+                debug(info);  //vypis do debugovaho okna
             }
         }
     }
@@ -89,8 +92,6 @@ void vi_test_wait10ms(void){
 
 int main(int argc, char *argv[])
 {
-//    QCoreApplication a(argc, argv);
-
     //jeden soubor je pro jeden nod otevren pro zapis pro druhy pro cteni
     //simulace multiplexni sbernice (+ diky souborum mame archiv syrovych dat komunikace)
     std::ifstream p1in("iotest_wr.bin", std::ifstream::binary);
@@ -106,15 +107,15 @@ int main(int argc, char *argv[])
     nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (t_vi_io_mn)"ND01", &term);
     nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (t_vi_io_mn)"ND02");
 
-    std::map<std::string, std::vector<u8> > isum = nod1->neighbourslist();
     std::string remote("ND02");
     nod1->pair(remote);
 
-//    term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
+    term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
+    term << "\r\n"; nod1->refreshcmdln();  //povel z prikazove radky, ted
 
 //    std::string cmd("CAPAB");
 //    std::string icapab = nod1->command(cmd);  //primy povel
 //    std::cout << icapab;
 
-//    return a.exec();
+    return 0;
 }

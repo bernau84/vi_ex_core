@@ -1,19 +1,7 @@
-#-------------------------------------------------
-#
-# Project created by QtCreator 2013-04-09T15:58:33
-#
-#-------------------------------------------------
-
-QT       += core
-
-QT       -= gui
-
-TARGET = testexample
+TARGET = noqt
 CONFIG   += console
-CONFIG   -= app_bundle
-
 TEMPLATE = app
-
+CONFIG -= qt
 
 SOURCES += main.cpp \
     vi_ex_io.cpp \

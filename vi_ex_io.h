@@ -3,7 +3,7 @@
 
 #include "vi_ex_def.h"
 #include "vi_ex_par.h"
-#include "include\circbuffer.h"
+#include "include/circbuffer.h"
 
 //defaultni parametry komunice
 #define VI_IO_I_BUF_SZ    ((u32)(200000))
@@ -55,7 +55,7 @@ private:
     u32 crc(t_vi_exch_dgram *dg);
 
 protected:
-    char mark[VI_MARKER_SZ];  //marker pro pakety unikatni pro P2P spojeni
+    u8 mark[VI_MARKER_SZ];  //marker pro pakety unikatni pro P2P spojeni
     char name[VI_NAME_SZ];  //jednoznacny nazev prvku na sbernici
 
     t_vi_io_r parser(u32 offs = 0);  //jednopruchodovy, kontroluje vstupni buffer a parsuje pozadavky
@@ -64,17 +64,17 @@ protected:
     circbuffer<u8> *rdBuf;  //jen deklarace sablon, inicializace v konstruktoru
     circbuffer<u8> *wrBuf;
 
-    virtual void wait10ms(void){ for(int t=10000; t; t--); } //cekani - zavisle na platforme
     virtual int read(u8 *d, u32 size) = 0;   //cteni syrovych dat, neblokujici - pokud neni co cist koncime ihned
     virtual int write(u8 *d, u32 size) = 0;  //zapis syrovych dat
+
+    virtual void wait10ms(void){ for(int t=10000; t; t--); } //cekani - zavisle na platforme
     virtual void debug(const char *msg){ fprintf(stderr, "%s", msg); }  //tracy
-    
     virtual void callback(t_vi_io_r event){;}     //s prijmem paketu nebo nejakou chybou obecne
     
     virtual void lock(){ while(reading)/* wait10ms()*/; reading = true; }  //zamykani cteni aby se nam nepretahovali readery
     virtual bool trylock(){ if(reading) return false; reading = true; return true; }
     virtual void unlock(){ reading = false; }
-
+    virtual bool islocked(){ if(reading) return true; else return false; }
 public:
     //ceka neco na prijmu
     u32 ispending(void){  //pokud tam ceka nejaky validni paket tak vraci jeho velikost

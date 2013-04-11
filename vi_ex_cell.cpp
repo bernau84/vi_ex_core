@@ -72,7 +72,7 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
                 u8 d[VI_HLEN() + VI_NAME_SZ];
                 preparetx((t_vi_exch_dgram *)d, VI_ECHO_REP, VI_NAME_SZ);  //paket si pripravime
                 memcpy(&d[VI_HLEN()], name, VI_NAME_SZ);
-                vi_ex_io::submit((t_vi_exch_dgram *)d);  //a pryc s tim
+                vi_ex_io::submit((t_vi_exch_dgram *)d);  //a pryc s tim bez cekani - neni potvrzovany
                 break;
             }
 
@@ -101,8 +101,8 @@ bool vi_ex_cell::pair(std::string &remote){
 	            //udelame echo a zjistime jestli takove zarizeni posloucha a ceka
 	            t_vi_exch_dgram echo;
 	            preparetx(&echo, VI_ECHO_REQ);  //paket si pripravime
-                    memcpy(echo.marker, act_mark, sizeof(mark)); //udelame z toho broadcast nebo unicast podle act_mark
-                    vi_ex_io::submit(&echo);
+                memcpy(echo.marker, act_mark, sizeof(mark)); //udelame z toho broadcast nebo unicast podle act_mark
+                vi_ex_io::submit(&echo);
 
 	            if(remote.empty()) 
 	                return true; //jen broadcastove echo
@@ -116,31 +116,31 @@ bool vi_ex_cell::pair(std::string &remote){
 	            if(neighbours.find(remote) == neighbours.end())
 	                break;  //cekame az se ozve
 
-	            if(0 == memcmp(neighbours[remote].data(), vi_ex_io::mark, sizeof(mark)))
-	                return true;  //zarizeni uz je sparovane (registrovane) s nami!                    
+                if(false == vi_is_broadcast((t_vi_io_id)neighbours[remote].data()))
+                    if(0 == memcmp(neighbours[remote].data(), vi_ex_io::mark, sizeof(mark)))
+                        return true;  //zarizeni uz je sparovane (registrovane) s nami!
+                    else
+                        return false;  //zarizeni uz je sparovane (registrovane) a my to nejsme!
 
-	            if(false == vi_is_broadcast((t_vi_io_id)neighbours[remote].data()))
-	                return false;  //zarizeni uz je sparovane (registrovane) a my to nejsme!
+                if(true == vi_is_broadcast((t_vi_io_id)mark)){ //ani my nemame jeste unikatni marker
+                    //nahodny vyber noveho markeru
+                    u8 eq = 1;
+                    while(eq){
 
-                    if(true == vi_is_broadcast((t_vi_io_id)mark)){ //ani my nemame jeste unikatni marker
-	                //nahodny vyber noveho markeru
-	                u8 eq = 1;
-	                while(eq){
+                        char smark[VI_NAME_SZ]; snprintf(smark, VI_NAME_SZ, "%04d", rand() % 9999); //vygenerujem nahodny
+                        memcpy(mark, smark, sizeof(mark)); //4 znakove cislo
 
-	                    char smark[VI_NAME_SZ]; snprintf(smark, VI_NAME_SZ, "%04d", rand() % 9999); //vygenerujem nahodny
-	                    memcpy(mark, smark, sizeof(mark)); //4 znakove cislo
-
-	                    eq = 0; //kontrola unikatnosti
-                            for(std::map<std::string, std::vector<u8> >::iterator it = neighbours.begin();
-                                it != neighbours.end(); it ++)
-                                    if(0 == memcmp(it->second.data(), vi_ex_io::mark, sizeof(mark))) eq = 1;
-	                }
-	            }    
+                        eq = 0; //kontrola unikatnosti
+                        for(std::map<std::string, std::vector<u8> >::iterator it = neighbours.begin();
+                            it != neighbours.end(); it ++)
+                                if(0 == memcmp(it->second.data(), vi_ex_io::mark, sizeof(mark))) eq = 1;
+                    }
+                }
 
 	            u8 d[VI_HLEN() + VI_NAME_SZ]; //odeslem registracni paket
-	            preparetx((t_vi_exch_dgram *)d, VI_REG, VI_NAME_SZ);  //paket si pripravime
-	            memcpy(&d[VI_HLEN()], remote.c_str(), VI_NAME_SZ);
-                    vi_ex_io::submit((t_vi_exch_dgram *)d);  //a pryc s tim
+                t_vi_exch_dgram *dg = preparetx((t_vi_exch_dgram *)d, VI_REG, VI_NAME_SZ);  //paket si pripravime
+                memcpy(dg->d, remote.c_str(), VI_NAME_SZ);  //pridame jmeno druhe strany
+                vi_ex_io::submit(dg);  //a pryc s tim
 	            pair_sta = 2; //== default
 	            break;
 	        }
@@ -149,15 +149,17 @@ bool vi_ex_cell::pair(std::string &remote){
 	            neighbours.erase(remote);
 	            memcpy(act_mark, mark, sizeof(mark));
 	            pair_sta = 0;
+                break;
 
 	        default:  //jen cekani v podtstate
 	            pair_sta += 1;
+                break;
 	    }
 
-            parser();
+        parser();
 	    wait10ms();            
 	}
 
-return false;       
+    return false;
 }
 

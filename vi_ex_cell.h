@@ -172,17 +172,19 @@ public:
     //pokud ano predhodiho 
     void refreshcmdln(void){
 
-//        char rcv[VIEX_HID_SP];
-//        if(p_hi) if(p_hi->readsome(rcv, VIEX_HID_SP)) cmdln << rcv;  //sup do cache pokud tam neco ceka
-//        if(cmdln.find('\n') != std::string::npos){    //je tam uz cely komand?
+        size_t n;
+        char rcv[VIEX_HID_SP];
+        if(p_hi) if(p_hi->readsome(rcv, VIEX_HID_SP)) cmdln.append(rcv);  //sup do cache pokud tam neco ceka
+        if((n = cmdln.find('\n')) != std::string::npos){    //je tam uz cely komand?
 
-//            std::string cmd;
-//            std::getline(cmdln, cmd);  //vyctem prikaz
-//            cmdln = cmdln.substring(cmd.length()+1); //cache zkratime
+            cmdln.copy(rcv, n); //vyctem prikaz
+            cmdln.erase(0, n); //cache zkratime
 
-//            *p_hi << "<< \"" << cmd << "\"";
-//            *p_hi << ">> \"" << command(cmd) << "\""; //vykoname a vratime vysledek
-//        }
+            std::string cmd(rcv);
+
+            *p_hi << "<< \"" << cmd << "\"";
+            *p_hi << ">> \"" << command(cmd) << "\""; //vykoname a vratime vysledek
+        }
     }    
 
     std::map<std::string, std::vector<u8> > neighbourslist(void){

@@ -114,7 +114,7 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
     len -= n; cmd += n;
 
     //rozlicovani parametry podle konkretniho typu
-    u16 t = d->type & VI_ACK;
+    u16 t = d->type & ~VI_ACK;
     switch(t){
 
         case VI_ECHO_REQ:   //vyzva a rekce na pritomnost zarizeni
@@ -151,7 +151,7 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
         break;
     }
 
-    len -= snprintf(cmd, len, "\n\r"); //preklad do hi zacneme povelem
+    //len -= snprintf(cmd, len, "\n\r");
     return (len > 0) ? 1 : 0; //0 pokud jsme to preplnili
 }
 

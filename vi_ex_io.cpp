@@ -82,7 +82,8 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
         rdBuf->get(offs, (u8 *)dg.marker, VI_MARKER_SZ);
 
         if((0 == memcmp(dg.marker, mark, VI_MARKER_SZ) || //unicast
-            (vi_is_broadcast(&dg.marker)))){   //broadcast
+            (vi_is_broadcast(&dg.marker)) ||  //broadcast
+            (vi_is_broadcast((t_vi_io_id)mark)))){   //no filter
 
             //mame binarmi marker
             rdBuf->get(offs, (u8 *)&dg, VI_HLEN());   //vyctem hlavicku
@@ -100,8 +101,10 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
 
                 VI_DMSG("rx 0x%x / no%d / %dB", dg.type, dg.sess_id, dg.size);
 
-                callback(VI_IO_OK);//mame paket
-                return VI_IO_OK;
+                if(false == islocked()) //probiha cteni
+                    callback(VI_IO_OK); //nejspise na zaklade predesleho callbacku
+
+                return VI_IO_OK;  //mame paket
             }
 
             return VI_IO_WAITING;
@@ -232,7 +235,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
 
             rdBuf->get(offs, (u8 *)&dg, VI_HLEN());   //vyctem hlavicku
 
-            if((VI_ANY == dg.type) || (d->type == dg.type)){  //ten na ktery cekame
+            if((d->type == VI_ANY) || (d->type == dg.type)){  //ten na ktery cekame
 
 #ifdef VI_LINK_ACK
                 if((dg.type &= ~VI_ACK) >= VI_I){  //paket s potrvzenim?
@@ -251,7 +254,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                     sz = VI_LEN(d); //vyctem jen co se da; zbytek se pak v parseru zahodi
                 }
 
-                if(offs){
+                if(0 == offs){
                     
                     rdBuf->read((u8 *)d, sz);   //vyctem a posunem kruh buffer
                 } else {

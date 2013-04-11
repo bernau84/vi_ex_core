@@ -1,4 +1,3 @@
-
 #ifndef VI_EX_DEF_H
 #define VI_EX_DEF_H
 //datova vrstva
@@ -53,15 +52,12 @@ const struct t_vi_exch_cmd{
 } vi_exch_cmd[] = {  //definicce textovych povelu + vazba na binarni
 
     {"ECHO",      VI_ECHO_REQ},
-    {"BULK",      VI_BULK},
+    {"{echo}",    VI_ECHO_REP},
+    {"{register}",    VI_REG},
+    {"{bulk}",      VI_BULK},
     {"CAPAB",     VI_I_CAP},
     {"SET",       VI_I_SETUP_SET},  //priklad: >>SET Contrast 30
     {"GET",       VI_I_SETUP_GET},  //priklad: >>GET Brightness
-//    {"FLASH",     VI_I_FLASH},
-//    {"SHUTTER",   VI_I_SHUTTER},
-//    {"VIDEOOFF",  VI_I_STREAM_OFF},
-//    {"VIDEOON",   VI_I_STREAM_ON},
-//    {"SNAP",      VI_I_SNAP},       //priklad: <<SNAP + binarni paket vi_BULK
     {"UNKNOWN", (t_vi_exch_type)0}  //end mark
 };
 
