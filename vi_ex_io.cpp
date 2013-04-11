@@ -64,9 +64,6 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
 {
     t_vi_exch_dgram dg;
 
-    if(!trylock()) //neprovadime pokud uz se parsuje jinde
-        return VI_IO_FAIL;
-
     int rn; //refresh rx fronty, fce read ma byt neblokujici, vyctem vse co je
     u8 rd[2048];  //jen po kouskach aby sme zas nemuseli alokovat kvanta
     while((rn = read(rd, sizeof(rd))) > 0){
@@ -78,11 +75,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
     u32 n = rdBuf->rdAvail();  //kolik je tam celkem
     //VI_DMSG("Nod%d Rx avail %dB\n", id, n);
 
-    if(!n){
-
-        unlock();
-        return VI_IO_FAIL; //zadny paket tam neni
-    }
+    if(!n) return VI_IO_FAIL; //zadny paket tam neni
 
     while((n - offs) >= VI_MARKER_SZ){      //pokud tam neco je tak v tom hledame marker
 
@@ -106,12 +99,11 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
                 }
 
                 VI_DMSG("rx 0x%x / no%d / %dB", dg.type, dg.sess_id, dg.size);
+
                 callback(VI_IO_OK);//mame paket
-                unlock();
                 return VI_IO_OK;
             }
 
-            unlock();
             return VI_IO_WAITING;
         }
 
@@ -124,9 +116,8 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
 PARSER_TRASH_IT:  //zahodime cekajici data
     VI_DMSG("(!) rx purged, %dB", n);
     rdBuf->read(0, n);
-    callback(VI_IO_SYNTAX);
-    unlock();
 
+    callback(VI_IO_SYNTAX);
     return VI_IO_SYNTAX;
 }
 
@@ -241,7 +232,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
 
             rdBuf->get(offs, (u8 *)&dg, VI_HLEN());   //vyctem hlavicku
 
-            if((dg.type == 0) || (d->type == dg.type)){  //ten na ktery cekame
+            if((VI_ANY == dg.type) || (d->type == dg.type)){  //ten na ktery cekame
 
 #ifdef VI_LINK_ACK
                 if((dg.type &= ~VI_ACK) >= VI_I){  //paket s potrvzenim?
@@ -271,6 +262,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                 }
 
                 d->size = sz - VI_HLEN();  //upravime skutecnou velikost jestli bylo kraceno
+                unlock();
                 return VI_IO_OK;
             }
 

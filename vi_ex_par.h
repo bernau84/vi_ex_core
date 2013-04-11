@@ -35,16 +35,16 @@ typedef char (*t_vi_param_mn)[VIEX_PARAM_NAME_SIZE];
 //generalizovany prvek ze seznamu prametru
 typedef struct {
 
-    t_vi_param_mn name;
+    char name[VIEX_PARAM_NAME_SIZE];
     t_vi_param_type type;
     t_vi_param_flags def_range;
     u32 length;
-    u8 v[1];
+    u8 v[0];
 } __attribute__ ((packed)) t_vi_param;
 
 
-#define VIEX_PARAM_HEAD() (sizeof(t_vi_param)-1)        //delka hlavicky - stale stejna
-#define VIEX_PARAM_LEN(T, N) (sizeof(t_vi_param)-1+sizeof(T)*N)  //celkova delka jednoho param
+#define VIEX_PARAM_HEAD() (sizeof(t_vi_param))        //delka hlavicky - stale stejna
+#define VIEX_PARAM_LEN(T, N) (sizeof(t_vi_param)+sizeof(T)*N)  //celkova delka jednoho param
 
 //zapis a cteni nad streamem parametru
 class t_vi_param_stream {

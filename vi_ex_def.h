@@ -77,8 +77,8 @@ typedef struct {    //genericky paket
 } __attribute__ ((packed)) t_vi_exch_dgram;
 
 
-#define VI_HLEN() (sizeof(t_vi_exch_dgram) - 1)  //velikost hlavicky pouze
-#define VI_LEN(P) ((P)->size + sizeof(t_vi_exch_dgram) - 1)  //celkova velikost paketu
+#define VI_HLEN() (sizeof(t_vi_exch_dgram))  //velikost hlavicky pouze
+#define VI_LEN(P) ((P)->size + sizeof(t_vi_exch_dgram))  //celkova velikost paketu
 
 
 static const u32 vi_ex_crc32_table[] =

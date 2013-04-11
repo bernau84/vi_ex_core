@@ -6,8 +6,8 @@
 #include "include\circbuffer.h"
 
 //defaultni parametry komunice
-#define VI_IO_I_BUF_SZ    ((u32)(5000000*3 + 2000000)) //alespon na jeden obrazek
-#define VI_IO_O_BUF_SZ    ((u32)(5000000*3 + 2000000))
+#define VI_IO_I_BUF_SZ    ((u32)(200000))
+#define VI_IO_O_BUF_SZ    ((u32)(200000))
 #define VI_IO_RESEND_T    (1000)    //podle rychlosti site
 #define VI_IO_WAITMS_T    (3*VI_IO_RESEND_T)
 
@@ -71,7 +71,7 @@ protected:
     
     virtual void callback(t_vi_io_r event){;}     //s prijmem paketu nebo nejakou chybou obecne
     
-    virtual void lock(){ while(reading) wait10ms(); reading = true; }  //zamykani cteni aby se nam nepretahovali readery
+    virtual void lock(){ while(reading)/* wait10ms()*/; reading = true; }  //zamykani cteni aby se nam nepretahovali readery
     virtual bool trylock(){ if(reading) return false; reading = true; return true; }
     virtual void unlock(){ reading = false; }
 

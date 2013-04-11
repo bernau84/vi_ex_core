@@ -10,7 +10,7 @@ void vi_ex_cell::debug(const char *msg){
 	    char s_tick[32]; clock_t tick = clock();
             snprintf(s_tick, sizeof(s_tick), "%g ", ((float)tick)/CLOCKS_PER_SEC);
 	    *p_trace << s_tick;
-		*p_trace << msg;
+            *p_trace << msg;
 	}
 }  
 
@@ -36,8 +36,8 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
             	} catch(std::bad_alloc& ba){
 
                     char inf[128]; snprintf(inf, sizeof(inf), "(!!!)E bad_alloc caught: %s\n", ba.what());
-                                    debug(inf);
-                                    //assert(1); //while(1);
+                    debug(inf);
+                    //assert(1); //while(1);
             	}
 
                 rdBuf->get(VI_HLEN(), (u8 *)p_cap, dg.size);

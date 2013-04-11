@@ -1,6 +1,7 @@
 #include <QtCore/QCoreApplication>
 #include "vi_ex_cell.h"
 #include <fstream>
+#include <ctime>
 
 
 void vi_test_wait10ms(void);  //prototyp
@@ -20,6 +21,19 @@ protected:
         vi_test_wait10ms();
     }
 
+    virtual void callback(vi_ex_io::t_vi_io_r event){
+
+        vi_ex_cell::callback(event);  //zpracuje vnitrni kontrolni pakety protokolu
+        if(vi_ex_io::VI_IO_OK == event){
+
+            char rcv[VIEX_HID_SP];  //pakety aby byly potvrzeny tak se musi vycist
+            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){
+
+                debug(rcv);  //vypis do debugovaho okna
+            }
+        }
+    }
+
     virtual int read(u8 *d, u32 size){
 
         if(ist){
@@ -37,6 +51,7 @@ protected:
 
             ost->write((char *)d, size);
             if(ost->rdstate() & std::ifstream::failbit) return 0;
+            ost->flush();
             return size;
         }
 
@@ -60,14 +75,21 @@ vi_ex_fileio *nod2 = NULL;
 
 void vi_test_wait10ms(void){
 
-    if(nod1) nod1->parser(); for(int i=0; i<100000; i++);
-    if(nod2) nod2->parser(); for(int i=0; i<100000; i++);
+    clock_t goal;
+
+    if(nod1) nod1->parser();
+    goal = 5 + clock();
+    while (goal > clock());
+
+    if(nod2) nod2->parser();
+    goal = 5 + clock();
+    while (goal > clock());
 }
 
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication a(argc, argv);
+//    QCoreApplication a(argc, argv);
 
     //jeden soubor je pro jeden nod otevren pro zapis pro druhy pro cteni
     //simulace multiplexni sbernice (+ diky souborum mame archiv syrovych dat komunikace)
@@ -84,15 +106,15 @@ int main(int argc, char *argv[])
     nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (t_vi_io_mn)"ND01", &term);
     nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (t_vi_io_mn)"ND02");
 
-    /*std::map<std::string, std::vector<u8> > isum = */nod1->neighbourslist();
+    std::map<std::string, std::vector<u8> > isum = nod1->neighbourslist();
     std::string remote("ND02");
     nod1->pair(remote);
 
-    term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
+//    term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
 
-    std::string cmd("CAPAB");
-    std::string icapab = nod1->command(cmd);  //primy povel
-    std::cout << icapab;
+//    std::string cmd("CAPAB");
+//    std::string icapab = nod1->command(cmd);  //primy povel
+//    std::cout << icapab;
 
-    return a.exec();
+//    return a.exec();
 }
