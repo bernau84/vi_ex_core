@@ -3,6 +3,18 @@
 #define VI_EX_DEF_H
 //datova vrstva
 
+#include <stdint.h>
+#include <cstring>
+
+#define u8	unsigned char
+#define u16	unsigned short
+#define u32	unsigned int
+#define s8	signed char
+#define s16	signed short
+#define s32	signed int
+#define u64	unsigned long int
+#define s64	signed long int
+
 #define VI_MARKER_SZ    4
 typedef u8 (*t_vi_io_id)[VI_MARKER_SZ];
 
@@ -55,30 +67,21 @@ const struct t_vi_exch_cmd{
 
 
 typedef struct {    //genericky paket
-    
-    struct { //mela by byt anonymni strukturou, gcc to ale nepodporuje
-        
-        u8  marker[VI_MARKER_SZ];  //znacka zacatku hlavicky - unikatni pro kazdy P2P kanal
-        u32 crc;            //hlavicka a nasledujich max 64B        
-        u32 sess_id;        //kontrola konzistence paketu; slouzi k potrvzovani        
-        u16 type;           //jinak t_vi_exch_type s kterym ale gcc zachazi jako s 32b 
-        u32 size;           //velikost nasledujicich dat
-    } __attribute__ ((packed)) h;           //to do - pokud budu umet zjistit velikost anonymni hlavicky, 
-                                            //pak je pomenovana astruktura zbytecna
-    union {  //anonymni union
-        
-        u8              d[0];       //obecna data (bulk)
-        t_vi_param      setup[0];   //nastaveni
-    };
+
+    u8  marker[VI_MARKER_SZ];  //znacka zacatku hlavicky - unikatni pro kazdy P2P kanal
+    u32 crc;            //hlavicka a nasledujich max 64B
+    u32 sess_id;        //kontrola konzistence paketu; slouzi k potrvzovani
+    u16 type;           //jinak t_vi_exch_type s kterym ale gcc zachazi jako s 32b
+    u32 size;           //velikost nasledujicich dat
+    u8  d[0];           //obecna data
 } __attribute__ ((packed)) t_vi_exch_dgram;
 
 
+#define VI_HLEN() (sizeof(t_vi_exch_dgram) - 1)  //velikost hlavicky pouze
+#define VI_LEN(P) ((P)->size + sizeof(t_vi_exch_dgram) - 1)  //celkova velikost paketu
 
-#define VI_HLEN() (sizeof(t_vi_exch_dgram::h))  //velikost hlavicky pouze
-#define VI_LEN(P) ((P)->h.size + sizeof((P)->h))  //celkova velikost paketu
 
-
-static constu32 vi_ex_crc32_table[] =
+static const u32 vi_ex_crc32_table[] =
 {
   0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9,  0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
   0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61,  0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
@@ -121,27 +124,27 @@ inline u32 vi_ex_crc32 (const u8 *d, int n, u32 icrc){
     return crc;
 }
 
-static const u8 vi_marker_broadcast[VI_MARKER_SZ];
+static const u8 vi_marker_broadcast[VI_MARKER_SZ] = {0, 0, 0, 0};
 
 inline bool vi_is_broadcast(t_vi_io_id m){
   
   return (0 == memcmp(m, vi_marker_broadcast, VI_MARKER_SZ)) ? 1 : 0;
 }  
 
-inline bool vi_set_broadcast(t_vi_io_id m){ 
+inline void vi_set_broadcast(t_vi_io_id m){
 
-  memcpy(m, vi_marker_broadcast, VI_MARKER_SZ)); 
+  memcpy(m, vi_marker_broadcast, VI_MARKER_SZ);
 }
 
-inline bool vi_is_broadcast(t_vi_exch_dgram::h *h){
+//inline bool vi_is_broadcast(t_vi_exch_dgram::h *h){
   
-  return (0 == memcmp(h->marker, vi_marker_broadcast, VI_MARKER_SZ)) ? 1 : 0;
-}  
+//  return (0 == memcmp(h->marker, vi_marker_broadcast, VI_MARKER_SZ)) ? 1 : 0;
+//}
 
-inline bool vi_set_broadcast(t_vi_exch_dgram::h *h){ 
+//inline void vi_set_broadcast(t_vi_exch_dgram::h *h){
 
-  memcpy(h->marker, vi_marker_broadcast, VI_MARKER_SZ)); 
-}
+//  memcpy(h->marker, vi_marker_broadcast, VI_MARKER_SZ);
+//}
 
 
 #endif // VI_EX_DEF_H

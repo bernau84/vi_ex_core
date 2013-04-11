@@ -3,12 +3,14 @@
 #include <cstring>
 #include <cstdlib>
 
+u32 vi_ex_io::cref;  //staticka promenna musi mit deklaraci zvlast
+
 #define VI_DMSG(...) \
 { \
-    char t[2*VI_PARAM_NM]; snprintf(t, sizeof(t), __VA_ARGS__); \
-    char msg[3*PP_PARAM_NM]; snprintf(msg, sizeof(msg), "Node %d %s\n", cref, t); \
+    char arg[256]; snprintf(arg, sizeof(arg), __VA_ARGS__); \
+    char msg[256]; snprintf(msg, sizeof(msg), "%s: %s\n", (char *)name, arg); \
     debug(msg); \
-}
+} \
 
 vi_ex_io::vi_ex_io(t_vi_io_mn _name, int iosize){
 
@@ -16,22 +18,26 @@ vi_ex_io::vi_ex_io(t_vi_io_mn _name, int iosize){
     sess_id = 0;
     cref++;
 
-    if(_name == NULL) snprintf(name, sizeof(name), "%04d", cref);  //defaultni nazev je poradove cislo v systemu
-        else strcpy(name, _name); //jinak berem co nam nuti
-
     //vyrobime alespon nejakou identifikaci
-    memset(mark, 0, sizeof(mark)); // == prijimame vse
+    if(_name == NULL) snprintf(name, sizeof(name), "%04d", cref);  //defaultni nazev je poradove cislo v systemu
+        else memcpy(name, _name, sizeof(name)); //jinak berem co nam nuti
+
+    memset(mark, 0, sizeof(mark)); // == defultne prijimame vse
 
     omem = imem = NULL;
     rdBuf = wrBuf = NULL;
 
-    if(!iosize) return; //buffery se dodefinuji jinde
+    if(0 == iosize) return; //buffery se dodefinuji jinde
 
-    if((imem = (u8 *)calloc(iosize, 1))) VI_DMSG("input buf alocated");
-        else rdBuf = new circbuffer<u8>(imem, iosize);
+    if(NULL != (imem = (u8 *)calloc(iosize, 1)))
+        rdBuf = new circbuffer<u8>(imem, iosize);
+    else
+        VI_DMSG("(!) input aloc. failed");
 
-    if((omem = (u8 *)calloc(iosize, 1))) VI_DMSG("output buf alocated");
-        else wrBuf = new circbuffer<u8>(omem, iosize);    
+    if(NULL != (omem = (u8 *)calloc(iosize, 1)))
+        wrBuf = new circbuffer<u8>(omem, iosize);
+    else
+        VI_DMSG("(!) output aloc. failed");
 }
 
 vi_ex_io::~vi_ex_io(){
@@ -49,9 +55,9 @@ vi_ex_io::~vi_ex_io(){
 
 u32 vi_ex_io::crc(t_vi_exch_dgram *dg)
 {
-    u32 n = dg->size + (&(dg->crc) - dg);
-    if(n > 64) n = 64;
-    return vi_ex_crc32(&(dg->crc), n, VI_CRC_INI);
+    u32 n = dg->size + ((u8 *)&(dg->crc) - (u8 *)dg); //pocet dat za CRC polickem
+    if(n > 64) n = 64;  //pocitame jen ze zacatku
+    return vi_ex_crc32((u8 *)&(dg->crc), n, VI_CRC_INI);
 }
 
 vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
@@ -62,18 +68,15 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
         return VI_IO_FAIL;
 
     int rn; //refresh rx fronty, fce read ma byt neblokujici, vyctem vse co je
-    u8 rd[VI_COMMAND_NM*2048];  //jen po kouskach aby sme zas nemuseli alokovat kvanta
+    u8 rd[2048];  //jen po kouskach aby sme zas nemuseli alokovat kvanta
     while((rn = read(rd, sizeof(rd))) > 0){
 
         //VI_DMSG("Nod%d Rx imed %dB\n", id, rn);
         rdBuf->write(rd, rn);  //zapisem to k nam do buferu
     }
 
-    int n = rdBuf->rdAvail();  //kolik je tam celkem
+    u32 n = rdBuf->rdAvail();  //kolik je tam celkem
     //VI_DMSG("Nod%d Rx avail %dB\n", id, n);
-
-    u32 m = VI_MARKER_SZ;  //kolik minimalne chcem
-    u8 summ; for(int im = 0; im<m; im++) summ |= marker[im];  //mame nejaky marker; pokud musime poslouchat vsechno   
 
     if(!n){
 
@@ -81,20 +84,17 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
         return VI_IO_FAIL; //zadny paket tam neni
     }
 
-    while((n - offs) >= m){      //pokud tam neco je tak v tom hledame marker
+    while((n - offs) >= VI_MARKER_SZ){      //pokud tam neco je tak v tom hledame marker
 
-        rdBuf->get(offs, (u8 *)dg.h.marker, m);
+        rdBuf->get(offs, (u8 *)dg.marker, VI_MARKER_SZ);
 
-        if(VI_MARKER_BROADCAST != summ)  //pokud uz nemame flag VI_MARKER_BROADCAST sami (tj. nas marker je neinizializovany == 0)
-            for(int im = 0; im<m; im++) summ |= dg.h.marker[im];
-
-        if((0 == memcmp(dg.h.marker, vi_b_mark, m) || //unicast
-            (VI_MARKER_BROADCAST == summ))){   //broadcast
+        if((0 == memcmp(dg.marker, mark, VI_MARKER_SZ) || //unicast
+            (vi_is_broadcast(&dg.marker)))){   //broadcast
 
             //mame binarmi marker
-            rdBuf->get(offs, (u8 *)&dg, sizeof(dg.h));   //vyctem hlavicku
+            rdBuf->get(offs, (u8 *)&dg, VI_HLEN());   //vyctem hlavicku
 
-            if(dg.h.size >= rdBuf->size)  //muze se nam vubec vejit?
+            if(dg.size >= rdBuf->size)  //muze se nam vubec vejit?
                 goto PARSER_TRASH_IT; //ne - zahodime vse co ceka
 
             if(n >= VI_LEN(&dg)){  //mame tam data z celeho paketu
@@ -105,7 +105,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
                     goto PARSER_TRASH_IT;
                 }
 
-                VI_DMSG("rx 0x%x / no%d / %dB", dg.h.type, dg.h.sess_id, dg.h.size);
+                VI_DMSG("rx 0x%x / no%d / %dB", dg.type, dg.sess_id, dg.size);
                 callback(VI_IO_OK);//mame paket
                 unlock();
                 return VI_IO_OK;
@@ -136,23 +136,24 @@ vi_ex_io::t_vi_io_r vi_ex_io::resend()
     return VI_IO_OK;
 #endif // VI_LINK_ACK
 
-    u32 n = wrBuf->rdAvail();
+    int n = wrBuf->rdAvail();
 
-    t_vi_exch_dgram::h hd;
-    wrBuf->get(0, &hd, sizeof(hd));  //jen hlavicka
+    t_vi_exch_dgram dg;
+    wrBuf->get(0, (u8 *)&dg, VI_HLEN());  //jen hlavicka
 
-    int rn = sizeof(hd)+hd.size;
-    if((n < rn) || (0 != memcmp(d->h.marker, mark, VI_MARKER_SZ)) { //nic naseho k preposlani
+    int rn = VI_LEN(&dg);
+    if((n < rn) || (0 != memcmp(dg.marker, mark, VI_MARKER_SZ))) { //nic naseho k preposlani
 
-        VI_DMSG("(!) resend length/marker error 0x%x / no%d / %dB", hd.type, hd.sess_id, hd.size);
+        VI_DMSG("(!) resend length/marker error 0x%x / no%d / %dB", dg.type, dg.sess_id, dg.size);
         return VI_IO_OK; //neco spatne; koncime, jako by se stalo
     }
 
-    u8 *buf = new u8[rn]; wrBuf->get(0, buf, rn); //znovu vyctem
-    t_vi_exch_dgram *d = (t_vi_exch_dgram *)buf;
-    write((u8 *)d, rn);  //odeslem
-    VI_DMSG("resend 0x%x / no%d / %dB", d->h.type, d->h.sess_id, d->h.size);
+    u8 *buf = new u8[rn];
+    wrBuf->get(0, buf, rn); //znovu vyctem vse
+    write(buf, rn);  //odeslem
+    delete[] buf;
 
+    VI_DMSG("resend 0x%x / no%d / %dB", dg.type, dg.sess_id, dg.size);
     return VI_IO_OK;
 }
 
@@ -162,19 +163,19 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
 
     d->crc = crc(d); //dopocitame
 
-    u8 summ = 0; for(int im = 0; im<VI_MARKER_SZ; i++) summ |= d->h.marker[im];
-    if((0 == memcmp(d->h.marker, mark, VI_MARKER_SZ)) || (VI_MARKER_BROADCAST == summ)){  //sanity check
+    if((0 == memcmp(d->marker, mark, VI_MARKER_SZ)) ||
+            (vi_is_broadcast((t_vi_io_id)d->marker))){  //je to paket od nas? (vcertne broadcastu)
 
         write((u8 *)d, VI_LEN(d));       //odeslem
-        VI_DMSG("tx 0x%x / no%d / %dB", d->h.type, d->h.sess_id, d->h.size);
+        VI_DMSG("tx 0x%x / no%d / %dB", d->type, d->sess_id, d->size);
     } else {
 
-        VI_DMSG("(!) rejected 0x%x / no%d", d->h.type, d->h.sess_id);
+        VI_DMSG("(!) rejected 0x%x / no%d", d->type, d->sess_id);
         return VI_IO_FAIL;  //jinak
     }
 
 #ifdef VI_LINK_ACK
-    if((timeout) && ((d->h.type & ~VI_ACK) < VI_I)) //chceme potrvzeni?
+    if((timeout) && ((d->type & ~VI_ACK) < VI_I)) //chceme potrvzeni?
 #endif // VI_LINK_ACK        
         return VI_IO_OK;
 
@@ -186,22 +187,22 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
         wrBuf->write((u8 *)d, VI_LEN(d)); //tim zajistime resend, jinak holt bez nej - jen cekame na dovysilani
     } else {
 
-        VI_DMSG("(!) too long for resend 0x%x / no%d", d->h.type, d->h.sess_id);
+        VI_DMSG("(!) too long for resend 0x%x / no%d", d->type, d->sess_id);
     }
 
     //zamek hlavne zabranuje tomu aby v ramci cekani volala parser i appl
     bool lo = trylock(); //pokud uz bylo zamknuto nechavame byt (mohou se zanorovat)
-    t_vi_exch_dgram::h hd;
+    t_vi_exch_dgram dg;
     u32 offs = 0;
 
     while(timeout > 0){  //jde o potrvzovana data, cekame na ACK
 
         if(VI_IO_OK == parser(offs)){
 
-            rdBuf->get(0, (u8 *)&hd, sizeof(hd));   //nakopirujem head
-            if((VI_ACK & hd.type) && (d->h.sess_id == hd.sess_id)){   //dostali jsme potvrzeni na nas paket?
+            rdBuf->get(0, (u8 *)&dg, VI_HLEN());   //nakopirujem head
+            if((VI_ACK & dg.type) && (d->sess_id == dg.sess_id)){   //dostali jsme potvrzeni na nas paket?
 
-                VI_DMSG("rx ack / no%d", hd.sess_id);
+                VI_DMSG("rx ack / no%d", dg.sess_id);
                 return VI_IO_OK;
             } else {
 
@@ -214,7 +215,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
             resend();  //zajistuje preposilani paketu
     }
 
-    VI_DMSG("(!) rx ack timeout / no%d", dg.h.sess_id);
+    VI_DMSG("(!) rx ack timeout / no%d", dg.sess_id);
 
     if(lo) unlock();
     return VI_IO_TIMEOUT; //Ok pokud prislo ACK nebo pokud nebylo treba
@@ -222,40 +223,40 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
 
 vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
 
-    u8 summ = 0; for(int im = 0; im<VI_MARKER_SZ; i++) summ |= d->h.marker[im];
-    if((0 != memcmp(d->h.marker, mark, VI_MARKER_SZ)) && (VI_MARKER_BROADCAST != summ)){  //sanity check
+    if((0 != memcmp(d->marker, mark, VI_MARKER_SZ)) &&
+            (false == vi_is_broadcast((t_vi_io_id)d->marker))){  //sanity check
 
         VI_DMSG("(!) rx dgram not prepared");
         return VI_IO_FAIL;  //jinak
     }
 
     lock(); //nechcem aby kdokoli jiny take cekal, v jednovlakene app riziko deadlocku pokud
-    t_vi_exch_dgram::h hd;
-    memset(&hd, 0, sizeof(hd));
+    t_vi_exch_dgram dg;
+    memset(&dg, 0, sizeof(dg));
     u32 offs = 0;
 
     while(timeout > 0){  //cekame na prijem celeho paketu (pokud tam neni)
 
         if(VI_IO_OK == parser(offs)){
 
-            rdBuf->get(offs, (u8 *)&hd, sizeof(dg.h));   //vyctem hlavicku
+            rdBuf->get(offs, (u8 *)&dg, VI_HLEN());   //vyctem hlavicku
 
-            if((hd.type == 0) || (d->h.type == hd.type)){  //ten na ktery cekame
+            if((dg.type == 0) || (d->type == dg.type)){  //ten na ktery cekame
 
 #ifdef VI_LINK_ACK
-                if((hd.type &= ~VI_ACK) >= VI_I){  //paket s potrvzenim?
+                if((dg.type &= ~VI_ACK) >= VI_I){  //paket s potrvzenim?
 
                     t_vi_exch_dgram ack;
-                    preparetx(&ack, VI_ACK, 0, hd.sess_id);
-                    write((u8 *)&ack, sizeof(ack.h));  //odeslem hned potvrzovaci paket
-                    VI_DMSG("tx ack / no%d", hd.sess_id); //!!s id puvodniho paketu
+                    preparetx(&ack, VI_ACK, 0, dg.sess_id);
+                    write((u8 *)&ack, VI_LEN(&ack));  //odeslem hned potvrzovaci paket
+                    VI_DMSG("tx ack / no%d", dg.sess_id); //!!s id puvodniho paketu
                 }
 #endif // VI_LINK_ACK
 
-                u32 sz = sizeof(hd)+h.size; //celkova delka paketu
+                u32 sz = VI_LEN(&dg); //celkova delka paketu
                 if(VI_LEN(d) < sz){  //rx paket ma ukazovat na co je alokovany
 
-                    VI_DMSG("(!) rx / no%d dgram size < pending", hd.sess_id);
+                    VI_DMSG("(!) rx / no%d dgram size < pending", dg.sess_id);
                     sz = VI_LEN(d); //vyctem jen co se da; zbytek se pak v parseru zahodi
                 }
 
@@ -264,12 +265,12 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                     rdBuf->read((u8 *)d, sz);   //vyctem a posunem kruh buffer
                 } else {
                     
-                    rdBuf->get(offs, (u8 *)d, sz)   //abychmo nepreskakovali tak vyctem bez posunu rd
-                    hd.type = VI_ANY; //ale  paket zneplatnime aby nebyl v app zprac. 2x
-                    rdBuf->set(offs, (u8 *)&hd, sizeof(dg.h));   //zapisem zneplatnenou hlavicku
+                    rdBuf->get(offs, (u8 *)d, sz);  //abychmo nepreskakovali tak vyctem bez posunu rd
+                    dg.type = VI_ANY; //ale  paket zneplatnime aby nebyl v app zprac. 2x
+                    rdBuf->set(offs, (u8 *)&dg, VI_HLEN());   //zapisem zneplatnenou hlavicku
                 }
 
-                d->size = sz - sizeof(dg.h);  //upravime skutecnou velikost jestli bylo kraceno
+                d->size = sz - VI_HLEN();  //upravime skutecnou velikost jestli bylo kraceno
                 return VI_IO_OK;
             }
 

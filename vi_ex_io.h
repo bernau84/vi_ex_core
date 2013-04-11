@@ -9,7 +9,7 @@
 #define VI_IO_I_BUF_SZ    ((u32)(5000000*3 + 2000000)) //alespon na jeden obrazek
 #define VI_IO_O_BUF_SZ    ((u32)(5000000*3 + 2000000))
 #define VI_IO_RESEND_T    (1000)    //podle rychlosti site
-#define VI_IO_WAITMS_T    (3*VI_IO_WAITMS_T)
+#define VI_IO_WAITMS_T    (3*VI_IO_RESEND_T)
 
 #define VI_LINK_ACK   //resi spolehlivost uz na linkove vrstve
 //pokud ano pak je kazdy paket potrzovan hned po prijeti do bufferu prazdnym ACk paketem
@@ -44,18 +44,20 @@ public:
     };
 
 private:
-    static u32 cref;  //jen pomocny citac "referenci"
+    static u32 cref;  //jen pomocny citac instanci
     
     volatile bool reading;  //zamyka vycitani fronty (mutex by byl lepsi, ale to az ve wrapperu)
     volatile u32 sess_id;  //inkremenralni session id - zvedame s kazdym paketem; se stejnym id pak cekame odpoved
 
-    char mark[VI_MARKER_SZ];  //marker pro pakety unikatni pro P2P spojeni
-    char name[VI_NAME_SZ];  //jednoznacny nazev prvku na sbernici
-    
     u8 *imem;  //vnitrni buffery pro prijem a resend
     u8 *omem;
 
+    u32 crc(t_vi_exch_dgram *dg);
+
 protected:
+    char mark[VI_MARKER_SZ];  //marker pro pakety unikatni pro P2P spojeni
+    char name[VI_NAME_SZ];  //jednoznacny nazev prvku na sbernici
+
     t_vi_io_r parser(u32 offs = 0);  //jednopruchodovy, kontroluje vstupni buffer a parsuje pozadavky
     t_vi_io_r resend();  //zajistujeme preposlani potvrzovanych paketu
 
@@ -85,8 +87,8 @@ public:
             return 0; 
 
         t_vi_exch_dgram dg;
-        rdBuf->get(0, (u8 *)&dg, sizeof(dg.h));   //vykopirujem header (bez posunu rx pntr!)
-        return dg.h.size;
+        rdBuf->get(0, (u8 *)&dg, VI_HLEN());   //vykopirujem header (bez posunu rx pntr!)
+        return dg.size;
 
         unlock();
     } 
@@ -106,11 +108,11 @@ public:
             if(NULL == (d = (t_vi_exch_dgram *) new u8[VI_HLEN() + size]))
                 return NULL;
 
-        memcpy(d->h.marker, mark, VI_MARKER_SZ);
-        d->h.type = t;
-        d->h.sess_id = (_sess_id) ? _sess_id : (t >= VI_I) ? sess_id : ++sess_id;  //tx inc jen pokud je paket potvrzovany
-        d->h.crc = VI_CRC_INI;
-        d->h.size = size;
+        memcpy(d->marker, mark, VI_MARKER_SZ);
+        d->type = t;
+        d->sess_id = (_sess_id) ? _sess_id : (t >= VI_I) ? sess_id : ++sess_id;  //tx inc jen pokud je paket potvrzovany
+        d->crc = VI_CRC_INI;
+        d->size = size;
         return d;
     }       
 
@@ -121,11 +123,11 @@ public:
             if(NULL == (d = (t_vi_exch_dgram *) new u8[VI_HLEN() + size]))
                 return NULL;
 
-        memcpy(d->h.marker, mark, VI_MARKER_SZ);
-        d->h.type = t;
-        d->h.sess_id = 0;  //nevime a asi je nam to jedno - to do - asi by sla vymyslet vyssi logika; nepr kontrola na konzistenci, apod...
-        d->h.crc = VI_CRC_INI;
-        d->h.size = size;        
+        memcpy(d->marker, mark, VI_MARKER_SZ);
+        d->type = t;
+        d->sess_id = 0;  //nevime a asi je nam to jedno - to do - asi by sla vymyslet vyssi logika; nepr kontrola na konzistenci, apod...
+        d->crc = VI_CRC_INI;
+        d->size = size;
         return d;
     }
 
