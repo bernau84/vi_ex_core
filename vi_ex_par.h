@@ -3,167 +3,304 @@
 
 #include <typeinfo>
 
-//datove typy nastaveni; inspirovane z enum v4l2_ctrl_type
-//jine nepodporujem protoze je neumime jednoduse serializovat
+/*!
+  \enum t_vi_param_type
+
+    supported setting element types; inpired by enum v4l2_ctrl_type
+    should be enought
+
+    VI_TYPE_UNKNOWN
+    VI_TYPE_BYTE
+    VI_TYPE_CHAR
+    VI_TYPE_INTEGER
+    VI_TYPE_BOOLEAN
+    VI_TYPE_INTEGER64
+    VI_TYPE_FLOAT
+*/
 typedef enum {
-    VI_TYPE_UNKNOWN = 0,
-    VI_TYPE_BYTE = 1,
-    VI_TYPE_CHAR,  //slouzi i pro vytvoreni stringu (nula se ale pocita)
-    VI_TYPE_INTEGER,
-    VI_TYPE_BOOLEAN,
-    VI_TYPE_INTEGER64,
-    VI_TYPE_FLOAT,
+#define VI_ST_ITEM(def, cnt, type, idn, sz) def = cnt,\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
     VI_TYPE_ENDFLAG
 } t_vi_param_type;
 
-//pokud je parametrem nejaka limitno hodnota pak pro vycet pouzivame MIN, RANGE2, RANGE3...atd
-//pokud potrebujem jen zadat min max a step tak nastavujem jen MIN, RANGE2, a MAX
-typedef enum { //datove typy nastaveni; oprasknute z enum v4l2_ctrl_type
 
-    VI_TYPE_P_VAL = 0,   //aktualni hodnota
-    VI_TYPE_P_MIN = 1,   //minimum rozsahu nebo 1. volba u menu
-    VI_TYPE_P_RANGE2 = 2, //2. hodnota, u cisel danych rozsahem je to MIN + step
-    VI_TYPE_P_RANGE3 = 3, //3. hodnota atd... az do 254
-    VI_TYPE_P_MAX = 254,  //maximum rozsahu
-    VI_TYPE_P_DEF = 255  //defaultni hodnota
+/*!
+  \struct t_vi_param_type_lut
+  \todo - convert do parametric macro
+
+    helper lut defining symbolic name of type and
+    size of one item
+
+    {VI_TYPE_UNKNOWN,   "",  0},
+    {VI_TYPE_BYTE,      "B", 8*sizeof(u8)},
+    {VI_TYPE_CHAR,      "C", 8*sizeof(char)},
+    {VI_TYPE_INTEGER,   "I", 8*sizeof(int)},
+    {VI_TYPE_BOOLEAN,   "b", 1},
+    {VI_TYPE_INTEGER64, "L", 8*sizeof(s64)},
+    {VI_TYPE_FLOAT,     "F", 8*sizeof(double)},
+*/
+const struct {
+
+    const char *s;    /**< short name (for text comand mode) */
+    u32 sz;     /**< item bites size */
+} t_vi_param_type_lut[] = {
+
+#define VI_ST_ITEM(def, cnt, type, idn, sz) {idn, sz},\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+    {"",  0}
+};
+
+
+/*!
+  \enum t_vi_param_flags
+  \brief description of actual and default parametr values type
+
+  range definition - MIN, RANGE2(== MIN + STEP), MAX
+  enum definition - MIN, RANGE2, RANGE3, RANGE4 ..etc
+*/
+typedef enum {
+
+    VI_TYPE_P_VAL = 0,   /**< actual value */
+    VI_TYPE_P_MIN = 1,   /**< minimum or first enum option */
+    VI_TYPE_P_RANGE2 = 2, /**< min+step or second enum option  */
+    VI_TYPE_P_RANGE3 = 3, /**< third enum option (4, 5. ..up to 254 possible enum values) */
+    VI_TYPE_P_MAX = 254,  /**< maximum or last enum opion */
+    VI_TYPE_P_DEF = 255  /**< default */
 } t_vi_param_flags;
 
 #define VIEX_PARAM_NAME_SIZE    32
 
-typedef char (*t_vi_param_mn)[VIEX_PARAM_NAME_SIZE];
+typedef char (t_vi_param_mn)[VIEX_PARAM_NAME_SIZE];
+typedef t_vi_param_mn *p_vi_param_mn;
 
-//generalizovany prvek ze seznamu prametru
+/*!
+    \typedef t_vi_param
+    \brief generic viex setting paket
+
+    typedef struct {
+
+        char name[VIEX_PARAM_NAME_SIZE];
+        t_vi_param_type type;
+        t_vi_param_flags def_range;
+        u32 length;
+        u8 v[1];
+    }
+*/
+
 typedef struct {
+#define VI_S_ITEM(name, type, sz) type name;\
 
-    char name[VIEX_PARAM_NAME_SIZE];
-    t_vi_param_type type;
-    t_vi_param_flags def_range;
-    u32 length;
-    u8 v[0];
-} __attribute__ ((packed)) t_vi_param;
+#include "vi_ex_def_settings_head.inc"
+#undef VI_S_ITEM
+    u8  v[1];           /*< empty [] if supported */
+} t_vi_param;
 
 
-#define VIEX_PARAM_HEAD() (sizeof(t_vi_param))        //delka hlavicky - stale stejna
-#define VIEX_PARAM_LEN(T, N) (sizeof(t_vi_param)+sizeof(T)*N)  //celkova delka jednoho param
+/*!
+    \brief size of viex serialized parametrer head
+*/
+const u32 vi_settings_hlen =
+#define VI_S_ITEM(name, type, sz) sz+\
 
-//zapis a cteni nad streamem parametru
+#include "vi_ex_def_settings_head.inc"
+#undef VI_S_ITEM
+                    0;
+
+#define VIEX_PARAM_HEAD() (vi_settings_hlen)        //size of serialized head setting size
+#define VIEX_PARAM_LEN(T, N) (VIEX_PARAM_HEAD() + sizeof(T)*N)  //size of overall serialized param size
+
+/*!
+    \class t_vi_param_stream
+    \brief streamed read and write parameter of viex node settings
+*/
 class t_vi_param_stream {
 
 private:
-    t_vi_param *bgn;
-    t_vi_param *end;
-    t_vi_param *it; //iterator
+    u8 *bgn;
+    u8 *end;
+    u8 *it; //iterator
 
-public:
-    //inicializace serializovanym blokem nebo jen mistem kde vyskladame parametry
-    t_vi_param_stream(u8 *p, int size){
+    /*!
+        \fn serialize
+        \brief convert structured settings to streamed data
+    */
+    bool serialize_head(const t_vi_param *d){
 
-        it = bgn = (t_vi_param *)p;
-        end = (t_vi_param *)(p+size);
+        if(!d) return false;
+        u32 n = end - it;
+        u8 *p = it;
+
+#define VI_S_ITEM(name, type, sz)\
+        if(n >= sz) memcpy(p, &(d->name), sz);\
+            else return false;\
+        n -= sz; p += sz;\
+
+#include "vi_ex_def_settings_head.inc"
+#undef VI_S_ITEM
+
+        return true;
     }
 
-    //je aktualni polozka v poradku - 0 ne, > 0 ano-vraci pocet prvku, -1 mimo ramec
+    /*!
+        \fn deserialize
+        \brief convert stremed data to structured settings
+    */
+    bool deserialize_head(t_vi_param *d){
+
+        if(!d) return 0;
+        u32 n = end - it;
+        u8 *p = it;
+
+#define VI_S_ITEM(name, type, sz)\
+        memcpy(&(d->name), p, sz);\
+        n -= sz; p += sz;\
+
+#include "vi_ex_def_settings_head.inc"
+#undef VI_S_ITEM
+
+        return true;
+    }
+
+public:
+
+    /*!
+        inicialization by serialized block of sttings bytes
+    */
+    t_vi_param_stream(u8 *p, int size){
+
+        it = bgn = p;
+        end = (p+size);
+    }
+
+    /*!
+        next item state
+        0 NO
+        >0 YES-returns number of element of setings array
+        -1 SYNTAX ERROR
+    */
     t_vi_param_type isvalid(int *len = 0){
 
         if((it < bgn) || (it >= end)) return VI_TYPE_UNKNOWN;
-        if((it->type <= VI_TYPE_UNKNOWN) || (it->type >= VI_TYPE_ENDFLAG)) return VI_TYPE_UNKNOWN;
 
-        if(len){  //nekdo si zada pocet polozek pole
+        t_vi_param st; deserialize_head(&st);
 
-            int tsz = 1;
-            switch(it->def_range){
-
-                case VI_TYPE_INTEGER: tsz = sizeof(int); break;
-                case VI_TYPE_INTEGER64: tsz = sizeof(u64); break;
-                case VI_TYPE_FLOAT: tsz = sizeof(double); break;
-                default: break;
-            }
-            *len = it->length / tsz;
-        }
-        return it->type;
+        if((st.type <= VI_TYPE_UNKNOWN) || (st.type >= VI_TYPE_ENDFLAG)) return VI_TYPE_UNKNOWN;
+        if(len) *len = st.length;
+        return st.type;
     }
 
-    //nastavi it na nejblizsi pozici name parametru
-    t_vi_param_type setpos(t_vi_param_mn name){
+    /*!
+        find and set pointer to parametr of name
+    */
+    t_vi_param_type setpos(p_vi_param_mn name){
 
         if(!name) return VI_TYPE_UNKNOWN; //fatal
-        while(isvalid())
-            if(0 == strcmp((char *)it->name, (char *)name))
-                return it->type;
-            else
-                it += VIEX_PARAM_HEAD() + it->length;
+
+        while(isvalid()){
+
+            t_vi_param st; deserialize_head(&st);
+
+            if(0 == strcmp((char *)st.name, (char *)name))
+                return st.type;
+
+            it += VIEX_PARAM_HEAD();
+            it += st.length * t_vi_param_type_lut[st.type].sz/8;
+        }
 
         return VI_TYPE_UNKNOWN;
     }
 
-    //nastavi it na nejblizsi pozici name parametru a typu hodnoty
-    t_vi_param_type setpos(t_vi_param_mn name, t_vi_param_flags f){
+    /*!
+        find and set pointer to parametr of name and type
+    */
+    t_vi_param_type setpos(p_vi_param_mn name, t_vi_param_flags f){
 
-        while(VI_TYPE_UNKNOWN != setpos(name))
-            if(it->def_range == f)
-                return it->type;
+        while(VI_TYPE_UNKNOWN != setpos(name)){
+
+            t_vi_param st; deserialize_head(&st);
+            if(st.def_range == f)
+                return st.type;
+        }
     }
 
-    //zapise a posune ukazatel; vraci kolik polozek jsem zapsal (v pripade pole)
-    //inicializace z l-hodnoty - typ pomuze urcit
-    template <typename T> int append(t_vi_param_mn name, T *val, int len = 1, t_vi_param_flags f = VI_TYPE_P_VAL){
+    /*!
+        template
+        write one setting and shift pointer
+        returns number of vaules (in array case)
+    */
+    template <typename T> int append(p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags f = VI_TYPE_P_VAL){
 
         if(!name || !val) return -1; //fatal
-        if(it >= end) return 0; //jsme na konci
+        if(it >= end) return 0; //the end
 
-        it->def_range = f;
+        t_vi_param st;
+        st.def_range = f;
+        memcpy(st.name, name, VIEX_PARAM_NAME_SIZE);
 
-        //dyn. identifikace typu
-        if(typeid(T) == typeid(u8)) it->type = VI_TYPE_BYTE;
-        else if(typeid(T) == typeid(char)) it->type = VI_TYPE_CHAR;
-        else if(typeid(T) == typeid(int)) it->type = VI_TYPE_INTEGER;
-        else if(typeid(T) == typeid(bool)) it->type = VI_TYPE_BOOLEAN;
-        else if(typeid(T) == typeid(u64)) it->type = VI_TYPE_INTEGER64;
-        else if(typeid(T) == typeid(double)) it->type = VI_TYPE_FLOAT;
-        else return 0; //typ ktery neumime zakodovat
+        //'dynamical identification of type'
+        if(0){}
+#define VI_ST_ITEM(def, cnt, ctype, idn, sz)\
+        else if(typeid(T) == typeid(ctype)) st.type = def;\
 
-        T *tmp = (T *)it->v;
-        for(it->length = 0; (it->length < (u32)len) && ((void *)tmp < (void *)end); it->length++)
-            *tmp++ = *val++; //diky attr packed budu muset stejne mozna kopirovat
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+        else return 0; //we can't encode this type
 
-        it->length *= sizeof(T);
-        u32 sh = VIEX_PARAM_HEAD() + it->length;
-        it += sh;
+        int vsz = t_vi_param_type_lut[st.type].sz / 8;
+        u8 *tmp = it + VIEX_PARAM_HEAD();
+        for(st.length = 0; (st.length < (u32)len) && ((void *)tmp < (void *)end); st.length++){
 
-        return (it->length / sizeof(T));
+            memcpy(tmp, val, t_vi_param_type_lut[st.type].sz);
+            tmp += vsz; val ++;
+        }
+
+        serialize_head(&st);
+        it += VIEX_PARAM_HEAD();
+        it += st.length * vsz;
+        return st.length;
     }
 
-    //prectem a posunem ukazatel; vraci kolik polozek jsem vycetl (v pripade pole)
-    //inicializace z l-hodnoty - typ pomuze urcit dyn. identifikace typu
-    template <typename T> int readnext(t_vi_param_mn name, T *val, int len = 1, t_vi_param_flags *f = 0){
+    /*!
+        template
+        read one setting and shift pointer
+        returns number of vaules (in array case)
+    */
+    template <typename T> int readnext(p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags *f = 0){
 
         if(!name || !val) return -1; //fatal
-        if(!isvalid()) return 0; //chyba - jsme na konci platnych zaznamu
+        if(!isvalid()) return 0; //error at the end of records
 
-        //sanity check; asi by sel vynechat pokud by bylo principielne splneno coz ale nemusi
-//        const type_info t_v = typeid(T); //jako reference bude rychlejsi porovnani asi (z prikladu...)
-        if((typeid(T) == typeid(u8)) && (it->type == VI_TYPE_BYTE)){}
-        else if((typeid(T) == typeid(char)) && (it->type == VI_TYPE_CHAR)){}
-        else if((typeid(T) == typeid(int)) && (it->type == VI_TYPE_INTEGER)){}
-        else if((typeid(T) == typeid(bool)) && (it->type == VI_TYPE_BOOLEAN)){}
-        else if((typeid(T) == typeid(u64)) && (it->type == VI_TYPE_INTEGER64)){}
-        else if((typeid(T) == typeid(double)) && (it->type == VI_TYPE_FLOAT)){}
-        else return 0;  //neumime
+        t_vi_param st; deserialize_head(&st);
 
-        int i = 0;
-        T *tmp = (T *)it->v;
-        for(; (i < (int)(it->length/sizeof(T))) && (i < len) && ((void *)tmp < (void *)end); i++)
-            *val++ = *tmp++; //diky attr packed budu muset stejne mozna kopirovat
+        //sanity check by 'dynamical identification of type'
+        if(0){}
+#define VI_ST_ITEM(def, cnt, ctype, idn, sz)\
+        else if((typeid(T) == typeid(ctype)) && (st.type == def)){}\
 
-        strcpy((char *)name, (char *)it->name);  //kontrola vzhledem k omezeni param fce netreba
-        if(f) *f = it->def_range;
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+        else return 0; //we can't encode this type
 
-        u32 sh = VIEX_PARAM_HEAD() + it->length;
-        it += sh;
+        u32 i, vsz = t_vi_param_type_lut[st.type].sz / 8;
+        u8 *tmp = it + VIEX_PARAM_HEAD();
+        for(i = 0; (i < st.length) && (i < (u32)len) && ((void *)tmp < (void *)end); i++){
 
-        return i;
+            memcpy(val, tmp, vsz);
+            tmp += t_vi_param_type_lut[st.type].sz; val ++;
+        }
+
+        st.length = i;  //possible length correction
+        strcpy((char *)name, (char *)st.name);
+        if(f) *f = st.def_range;
+
+        it += VIEX_PARAM_HEAD();
+        it += st.length * vsz;
+        return st.length;
     }
-
 };
 
 #endif // VI_EX_PARAM_H

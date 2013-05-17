@@ -1,6 +1,5 @@
 #ifndef VI_EX_DEF_H
 #define VI_EX_DEF_H
-//datova vrstva
 
 #include <stdint.h>
 #include <cstring>
@@ -8,74 +7,117 @@
 #define u8	unsigned char
 #define u16	unsigned short
 #define u32	unsigned int
+#define u64	unsigned long int
 #define s8	signed char
 #define s16	signed short
 #define s32	signed int
-#define u64	unsigned long int
 #define s64	signed long int
 
+#define VI_ENUMER_SZ    2
 #define VI_MARKER_SZ    4
-typedef u8 (*t_vi_io_id)[VI_MARKER_SZ];
+#define VI_CRC_SZ       4  //4 is maximum
 
+typedef u8 (t_vi_io_id)[VI_MARKER_SZ];
+typedef t_vi_io_id *p_vi_io_id;
+
+/*!
+    \enum types of viex pakets
+
+    from VI_I higher - acknowledged appliaction data
+    under VI_I - internal bus control packets
+*/
 typedef enum {
 
     VI_ANY = 0,
 
-    //ridici povely
-    VI_ECHO_REQ = 0x10, //vyzva na pritomnost zarizeni; muze se poslat i jako broadcast ala discovery pakety
-    VI_ECHO_REP, //odpoved na echo
-    VI_REG,  //registracni paket; dosud nespojeny nod (ktery posloucha vse) to inicializuje s vysilajicim
+    //bus control
+    VI_ECHO_REQ = 0x10, /**< call for presence; if broadcest acs as discovery packet */
+    VI_ECHO_REP,        /**< reply to VI_ECHO_REQ */
+    VI_REG,             /**< registraction request and reply; one nod connects with another nod to create unique P2P */
 
-    //nepotrvzovana data
-    VI_BULK = 0x20,  	//nestrukturovana/nepotvrzovana data - jina
+    //unacknowledged data
+    VI_BULK = 0x20,  	/**< other; not used */
 
     //potvrzovana data
-    VI_I = 0x80,      //zacatek potvrzovanych dat
-    VI_I_CAP,         //zadost o capabilities
-    VI_I_SETUP_SET,   //zapis nastaveni a vycteni nastaveni
-    VI_I_SETUP_GET,   //zadost o vycteni nastaveni a vlastni vycteni nastaveni
+    VI_I = 0x80,      /**< mark of acknowledged data */
+    VI_I_CAP,         /**< capabilities request and reply */
+    VI_I_SETUP_SET,   /**< settings write request; return updated settings */
+    VI_I_SETUP_GET,   /**< settings read request; return actual settings */
 
-//    VI_I_STREAM_ON,   //zapnuti streamingu
-//    VI_I_STREAM_OFF,  //vypnuti
-//    VI_I_SNAP,        //zadost o obrazek, vycteni obrazku
-//    VI_I_FLASH,       //nastaveni rezimu prisvetleni
-//    VI_I_SHUTTER,     //nastaveni rezimu uzaverky (clony)
+//    VI_I_STREAM_ON,   /**< streaming on */
+//    VI_I_STREAM_OFF,  /**< streaming off */
+//    VI_I_SNAP,        /**< picture req. / resp. */
+//    VI_I_FLASH,       /**< flash control */
+//    VI_I_SHUTTER,     /**< shutter control */
 
-    //potvrzeni - flag
-    VI_ACK = 0x8000
+    VI_ACK = 0x8000  /**< ack type (/ flag - not supported) */
 } t_vi_exch_type;
 
+/*!
+    \struct t_vi_exch_cmd
+    \brief lookup table for text commands to viex packet type
+*/
 const struct t_vi_exch_cmd{
 
     const char       *cmd;
     t_vi_exch_type    type;
-} vi_exch_cmd[] = {  //definicce textovych povelu + vazba na binarni
+} vi_exch_cmd[] = {  //text command definition
 
     {"ECHO",      VI_ECHO_REQ},
     {"{echo}",    VI_ECHO_REP},
     {"{register}",    VI_REG},
     {"{bulk}",      VI_BULK},
     {"CAPAB",     VI_I_CAP},
-    {"SET",       VI_I_SETUP_SET},  //priklad: >>SET Contrast 30
-    {"GET",       VI_I_SETUP_GET},  //priklad: >>GET Brightness
+    {"SET",       VI_I_SETUP_SET},  //example: SET Contrast 30
+    {"GET",       VI_I_SETUP_GET},  //example: GET Brightness
     {"UNKNOWN", (t_vi_exch_type)0}  //end mark
 };
 
+/*!
+    \typedef t_vi_exch_dgram
+    \brief generic viex paket
 
-typedef struct {    //genericky paket
+    typedef struct {
 
-    u8  marker[VI_MARKER_SZ];  //znacka zacatku hlavicky - unikatni pro kazdy P2P kanal
-    u32 crc;            //hlavicka a nasledujich max 64B
-    u32 sess_id;        //kontrola konzistence paketu; slouzi k potrvzovani
-    u16 type;           //jinak t_vi_exch_type s kterym ale gcc zachazi jako s 32b
-    u32 size;           //velikost nasledujicich dat
-    u8  d[0];           //obecna data
-} __attribute__ ((packed)) t_vi_exch_dgram;
+        t_vi_io_id  marker;  //viex datagram identification (in the sea of another bus data); u8[VI_MARKER_SZ]
+        u32 crc;            //crc of followed head data and first 64B of payload
+        u32 sess_id;        //for control of consistency of packet and for acknowledging
+        t_vi_exch_type type;  //enum
+        u32 size;           //size of payload
+        u8  d[0];           //payload
+    }
+
+    typedef comes from vi_ex_def_dg_head.inc using preprocesor
+    do not use packet attribute as it isn't supported same way od diff. compilers
+*/
+
+typedef struct {
+
+#define VI_H_ITEM(name, type, sz) type name;\
+
+#include "vi_ex_def_dgram_head.inc"
+#undef VI_H_ITEM
+    u8  d[1];           //empty [] if supported
+} t_vi_exch_dgram;
 
 
-#define VI_HLEN() (sizeof(t_vi_exch_dgram))  //velikost hlavicky pouze
-#define VI_LEN(P) ((P)->size + sizeof(t_vi_exch_dgram))  //celkova velikost paketu
+/*!
+    \brief size of viex datagram head
 
+    sum of size items in vi_ex_def_dg_head.inc
+*/
+const u32 vi_hlen =
+#define VI_H_ITEM(name, type, sz) sz+\
+
+#include "vi_ex_def_dgram_head.inc"
+#undef VI_H_ITEM
+                    0;
+
+#define VI_HLEN() (vi_hlen)  //size of header
+#define VI_LEN(P) ((P)->size + vi_hlen)  //datagram overall size
+
+
+#define VI_CRC_INI      0x41154115  //initial CRC
 
 static const u32 vi_ex_crc32_table[] =
 {
@@ -113,6 +155,10 @@ static const u32 vi_ex_crc32_table[] =
   0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,  0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
 };
 
+/*!
+    \fn vi_ex_crc32
+    \brief crc calculation of byte array
+*/
 inline u32 vi_ex_crc32 (const u8 *d, int n, u32 icrc){
 
     u32 crc = icrc;
@@ -120,28 +166,113 @@ inline u32 vi_ex_crc32 (const u8 *d, int n, u32 icrc){
     return crc;
 }
 
-static const u8 vi_marker_broadcast[VI_MARKER_SZ] = {0, 0, 0, 0};
+/*!
+    \fn vi_ex_crc32
+    \brief crc calculation of struktured packet
 
-inline bool vi_is_broadcast(t_vi_io_id m){
+    crc counts from all item of head after crc itsef
+    and 64B of payload maximally
+*/
+inline u32 vi_ex_crc32 (const t_vi_exch_dgram *d){
+
+    u32 icrc = VI_CRC_INI;
+
+#define VI_H_ITEM(name, type, sz)\
+    if((void *)&(d->name) > (void *)&(d->crc))\
+        icrc = vi_ex_crc32((const u8 *)&(d->name), sz, icrc);\
+
+#include "vi_ex_def_dgram_head.inc"
+#undef VI_H_ITEM
+
+    //dopocitame crc ze zacatku paketu
+    icrc = vi_ex_crc32(d->d, ((d->size > 64) ? 64 : d->size), icrc);
+
+    return icrc;
+}
+
+static const t_vi_io_id vi_marker_broadcast = {0, 0, 0, 0};
+
+/*!
+    \fn vi_is_broadcast
+    \brief test marker if is broadcasting
+*/
+inline bool vi_is_broadcast(p_vi_io_id m){
   
   return (0 == memcmp(m, vi_marker_broadcast, VI_MARKER_SZ)) ? 1 : 0;
 }  
 
-inline void vi_set_broadcast(t_vi_io_id m){
+/*!
+    \fn vi_set_broadcast
+    \brief set marker to broadcasting
+*/
+inline void vi_set_broadcast(p_vi_io_id m){
 
   memcpy(m, vi_marker_broadcast, VI_MARKER_SZ);
 }
 
-//inline bool vi_is_broadcast(t_vi_exch_dgram::h *h){
-  
-//  return (0 == memcmp(h->marker, vi_marker_broadcast, VI_MARKER_SZ)) ? 1 : 0;
-//}
+/*!
+    \fn vi_dg_serialize
+    \brief convert structured packet to serialized datagram
 
-//inline void vi_set_broadcast(t_vi_exch_dgram::h *h){
+    @param[in] d - structure to copy from
+    @param[out] p - datagram memory area to copy to
+    @param[out] n - number of free bytes to copy
+    @return  true if n >= overall packet size, false otherwise
+*/
+inline bool vi_dg_serialize(const t_vi_exch_dgram *d, u8 *p, u32 n){
 
-//  memcpy(h->marker, vi_marker_broadcast, VI_MARKER_SZ);
-//}
+    if(!d) return false;
+    u32 rest = n;
 
+#define VI_H_ITEM(name, type, sz)\
+    if(rest >= sz) memcpy(p, &(d->name), sz);\
+        else return false;\
+    rest -= sz; p += sz;\
+
+#include "vi_ex_def_dgram_head.inc"
+#undef VI_H_ITEM
+
+    if(rest >= d->size) memcpy(p, &(d->d), d->size);
+        else return false;
+
+    return true;
+}
+
+/*!
+    \fn vi_dg_deserialize
+    \brief convert datagram to structured packet
+
+    @param[out] d - structure to copy to; d->size is a free memory size for payload
+    @param[in] p - datagram to copy from
+    @param[in] n - datagram size
+    @return  true if alocted space >= d->size, false otherwise (copy only d->size)
+
+    assumes dgram is complete in p
+*/
+inline bool vi_dg_deserialize(t_vi_exch_dgram *d, const u8 *p, u32 n){
+
+    if(!d) return 0;
+    u32 free = d->size; //space prepared for payload
+
+    memset(d, 0, VI_HLEN());  //for the non writen bytes in enum larger than VI_ENUMER_SZ
+
+#define VI_H_ITEM(name, type, sz)\
+    memcpy(&(d->name), p, sz);\
+    n -= sz; p += sz;\
+
+#include "vi_ex_def_dgram_head.inc"
+#undef VI_H_ITEM
+
+    if((d->size <= free)){  //payload in p is complete and its size is <= free space
+
+       memcpy(&(d->d), p, d->size);
+       return true;
+   } else {
+
+       memcpy(&(d->d), p, free);
+       return false;
+   }
+}
 
 #endif // VI_EX_DEF_H
 

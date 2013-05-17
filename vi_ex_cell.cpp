@@ -21,8 +21,9 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
 
         vi_ex_io::callback(event); //zatim nic nedela
 
-        t_vi_exch_dgram dg;
-        rdBuf->get(0, (u8 *)&dg, VI_HLEN());   //vykopirujem header (bez posunu rx pntr!)
+        u8 sdg[VI_HLEN()];rdBuf->get(0, sdg, VI_HLEN());   //copy of rx buf
+        t_vi_exch_dgram dg; vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
+
         switch(dg.type){
 
             case VI_I_CAP:  //moznosti druhe strany; zalohujeme si u sebe
@@ -32,7 +33,7 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
                 try { //to do - takhle osetrit vsechny potencialne velke alokace
 
                     sz_cap = dg.size;
-                    p_cap = (t_vi_param *) new u8[sz_cap];
+                    p_cap = new u8[sz_cap];
             	} catch(std::bad_alloc& ba){
 
                     char inf[128]; snprintf(inf, sizeof(inf), "(!!!)E bad_alloc caught: %s\n", ba.what());
@@ -69,10 +70,10 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
 
             case VI_ECHO_REQ:{  //odpovime nasim VI_ECHO_REP
 
-                u8 d[VI_HLEN() + VI_NAME_SZ];
-                preparetx((t_vi_exch_dgram *)d, VI_ECHO_REP, VI_NAME_SZ);  //paket si pripravime
-                memcpy(&d[VI_HLEN()], name, VI_NAME_SZ);
-                vi_ex_io::submit((t_vi_exch_dgram *)d);  //a pryc s tim bez cekani - neni potvrzovany
+                u8 d[sizeof(t_vi_exch_dgram) + VI_NAME_SZ];
+                t_vi_exch_dgram *dg = preparetx(d, VI_ECHO_REP, VI_NAME_SZ);  //paket si pripravime
+                memcpy(dg->d, name, VI_NAME_SZ);
+                vi_ex_io::submit(dg);  //a pryc s tim bez cekani - neni potvrzovany
                 break;
             }
 
@@ -81,6 +82,9 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
                 rdBuf->read(NULL, VI_LEN(&dg));
                 break;
             }
+
+            default:
+                break;
         }
     }
 }
@@ -88,41 +92,43 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
 
 bool vi_ex_cell::pair(std::string &remote){
 
-	u8 act_mark[VI_MARKER_SZ]; 
-	vi_set_broadcast(&act_mark); //zaciname s broadcastem
+    u8 act_mark[VI_MARKER_SZ];
+    vi_set_broadcast(&act_mark); //zaciname s broadcastem
 
-	u8 pair_sta = 0;
-	for(int timeout = 10000; timeout > 0; timeout -= 10){ //cekame 10s jestli se ozve
-	    
-	    switch(pair_sta){
+    u8 pair_sta = 0;
+    for(int timeout = 10000; timeout > 0; timeout -= 10){ //cekame 10s jestli se ozve
 
-	        case 0: {
+        switch(pair_sta){
 
-	            //udelame echo a zjistime jestli takove zarizeni posloucha a ceka
-	            t_vi_exch_dgram echo;
-	            preparetx(&echo, VI_ECHO_REQ);  //paket si pripravime
+            case 0: {
+
+                //udelame echo a zjistime jestli takove zarizeni posloucha a ceka
+                t_vi_exch_dgram echo;
+                preparetx((u8 *)&echo, VI_ECHO_REQ);  //paket si pripravime
                 memcpy(echo.marker, act_mark, sizeof(mark)); //udelame z toho broadcast nebo unicast podle act_mark
                 vi_ex_io::submit(&echo);
 
-	            if(remote.empty()) 
-	                return true; //jen broadcastove echo
+                if(remote.empty())
+                    return true; //jen broadcastove echo
 
-	            pair_sta = 1;                    
-	            break;
-	        }
+                pair_sta = 1;
+                break;
+            }
 
-	        case 1: {
+            case 1: {
 
-	            if(neighbours.find(remote) == neighbours.end())
-	                break;  //cekame az se ozve
+                if(neighbours.find(remote) == neighbours.end())
+                    break;  //cekame az se ozve
 
-                if(false == vi_is_broadcast((t_vi_io_id)neighbours[remote].data()))
+                if(false == vi_is_broadcast((p_vi_io_id)neighbours[remote].data())){
+
                     if(0 == memcmp(neighbours[remote].data(), vi_ex_io::mark, sizeof(mark)))
                         return true;  //zarizeni uz je sparovane (registrovane) s nami!
-                    else
-                        return false;  //zarizeni uz je sparovane (registrovane) a my to nejsme!
 
-                if(true == vi_is_broadcast((t_vi_io_id)mark)){ //ani my nemame jeste unikatni marker
+                    return false;  //zarizeni uz je sparovane (registrovane) a my to nejsme!
+                }
+
+                if(true == vi_is_broadcast((p_vi_io_id)mark)){ //ani my nemame jeste unikatni marker
                     //nahodny vyber noveho markeru
                     u8 eq = 1;
                     while(eq){
@@ -137,28 +143,28 @@ bool vi_ex_cell::pair(std::string &remote){
                     }
                 }
 
-	            u8 d[VI_HLEN() + VI_NAME_SZ]; //odeslem registracni paket
-                t_vi_exch_dgram *dg = preparetx((t_vi_exch_dgram *)d, VI_REG, VI_NAME_SZ);  //paket si pripravime
+                u8 d[VI_HLEN() + VI_NAME_SZ]; //odeslem registracni paket
+                t_vi_exch_dgram *dg = preparetx(d, VI_REG, VI_NAME_SZ);  //paket si pripravime
                 memcpy(dg->d, remote.c_str(), VI_NAME_SZ);  //pridame jmeno druhe strany
                 vi_ex_io::submit(dg);  //a pryc s tim
-	            pair_sta = 2; //== default
-	            break;
-	        }
-
-	        case 52:  //05s po kroku 1 zkusime zas echo, ale uz unicast + vymazem zaznam z cache
-	            neighbours.erase(remote);
-	            memcpy(act_mark, mark, sizeof(mark));
-	            pair_sta = 0;
+                pair_sta = 2; //== default
                 break;
+            }
 
-	        default:  //jen cekani v podtstate
-	            pair_sta += 1;
-                break;
-	    }
+            case 52:  //05s po kroku 1 zkusime zas echo, ale uz unicast + vymazem zaznam z cache
+                neighbours.erase(remote);
+                memcpy(act_mark, mark, sizeof(mark));
+                pair_sta = 0;
+            break;
+
+            default:  //jen cekani v podtstate
+                pair_sta += 1;
+            break;
+        }
 
         parser();
-	    wait10ms();            
-	}
+        wait10ms();
+    }
 
     return false;
 }

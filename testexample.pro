@@ -16,4 +16,14 @@ HEADERS += \
     vi_ex_def.h \
     vi_ex_cell.h
 
+OTHER_FILES += \
+    vi_ex_def_settings_types.inc \
+    vi_ex_def_settings_head.inc \
+    vi_ex_def_dgram_head.inc
+
+
+
+
+
+
 

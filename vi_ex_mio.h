@@ -3,13 +3,15 @@
 
 #include "vi_ex_io.h"
 
-//globalni pointery na globalni bufery ktere mohou sdilet vsechny jednotky
+/*! global pointers to buffers shared by all nodes
+*/
 circbuffer<u8> *g_rdbuf;
 circbuffer<u8> *g_wrbuf;
 
-//multi io se zdileni prijimaciho buferu
-//pokud potrebujem zmensit pametove naroky tak vsechny prijimace mohou pracovat nad jednim prostorem
-//stejne se da zaridit i u vysilacu; u obou musime pretizit read a write tak aby sdileli zapisovaci pointery! 
+/*!
+    \class vi_ex_mio
+    \brief viex node with shared rx/tx buffer (save memory for multi node bus solution)
+*/
 class vi_ex_mio : public vi_ex_io
 {
 
@@ -17,24 +19,24 @@ protected:
     virtual int read(u8 *d, u32 size){
 
         if(g_rdbuf) rdBuf->write_mark = g_rdbuf->write_mark;
-        return 0; //vracime jako ze jsme nic nezapsali, parser ale pracuje nad kruh. bufferem
+        return 0; //false return; parser normaly work on buffer directly
     }
 
     virtual int write(u8 *d, u32 size){
 
         if(g_wrbuf) wrBuf->write_mark = g_wrbuf->write_mark;
-        return 0; //vracime jako ze jsme nic nezapsali, parser ale pracuje nad kruh. bufferem
+        return 0; //false return; parser normaly work on buffer directly
     }
 
 public:	
 	
-    vi_ex_iom(t_vi_io_mn _name) : t_vi_io(_name, 0) {  //inicializace predka bez alokace bufferu
+    vi_ex_iom(t_vi_io_mn _name) : t_vi_io(_name, 0) {  //no allocation buffers in ancestor
 
-        if(g_rdbuf) rdBuf = new circbuffer<u8>(*g_rdbuf);  //kopirovaci konstruktory se pouziji
+        if(g_rdbuf) rdBuf = new circbuffer<u8>(*g_rdbuf);  //uses copy constructor
         if(g_wrbuf) wrBuf = new circbuffer<u8>(*g_wrbuf);
     }
 
-    virtual ~vi_ex_iom(){;}   //to do - nezabranuje virtual volani destruktoru v predkovi
+    virtual ~vi_ex_iom(){;}
 
 };
 

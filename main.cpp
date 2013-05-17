@@ -2,6 +2,7 @@
 #include <fstream>
 #include <ctime>
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -63,7 +64,7 @@ protected:
 
 public:
     vi_ex_fileio(std::ifstream *_is, std::ofstream *_os,    //kominikacni soubory
-                 t_vi_io_mn _name = NULL,   //nazem prvku
+                 p_vi_io_mn _name = NULL,   //nazem prvku
                  std::fstream *_term = NULL) :  //terminalovy cloveci vstup/vystup
         vi_ex_cell(_name, _term), ist(_is), ost(_os){;}
 
@@ -89,6 +90,11 @@ void vi_test_wait10ms(void){
     while (goal > clock());
 }
 
+/*!
+  \todo vyzkouset jak funguje settings
+  \todo settings ve spojeni s textovym i/o
+  \todo settings vyuzitelny misto INI
+*/
 
 int main(int argc, char *argv[])
 {
@@ -101,18 +107,21 @@ int main(int argc, char *argv[])
     std::ofstream p2out("iotest_wr.bin", std::ofstream::binary);
 
     //human interface
-    std::fstream term("hiterminal.txt", std::fstream::in | std::fstream::out);
+    std::fstream term("hiterminal.txt", std::fstream::in | std::fstream::out | std::fstream::trunc);
 
     //p2p komunikace
-    nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (t_vi_io_mn)"ND01", &term);
-    nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (t_vi_io_mn)"ND02");
+    nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (p_vi_io_mn)"ND01", &term);
+    nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (p_vi_io_mn)"ND02");
 
     std::string remote("ND02");
     nod1->pair(remote);
 
-    term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
-    term << "\r\n"; nod1->refreshcmdln();  //povel z prikazove radky, ted
+   if(term.is_open()){
 
+        term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
+        term << "\r\n"; nod1->refreshcmdln();  //povel z prikazove radky, ted
+        term.flush();
+   }
 //    std::string cmd("CAPAB");
 //    std::string icapab = nod1->command(cmd);  //primy povel
 //    std::cout << icapab;
