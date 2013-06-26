@@ -193,7 +193,14 @@ public:
 
         size_t n;
         char rcv[VIEX_HID_SP];
-        if(p_hi) if(p_hi->readsome(rcv, VIEX_HID_SP)) cmdln.append(rcv);  //cache this chunk
+
+        if(p_hi){
+
+            p_hi->flush();
+            /*! \todo readsome doesnt work (?!) */
+            if(p_hi->readsome(rcv, VIEX_HID_SP)) cmdln.append(rcv);  //cache this chunk
+        }
+
         if((n = cmdln.find('\n')) != std::string::npos){    //comman is complete?
 
             cmdln.copy(rcv, n); //command readout
@@ -203,6 +210,9 @@ public:
 
             *p_hi << "<< \"" << cmd << "\"";
             *p_hi << ">> \"" << command(cmd) << "\""; //execute and write out response
+
+            p_hi->flush();
+            p_hi->readsome(rcv, VIEX_HID_SP); //dummy read of written
         }
     }    
 

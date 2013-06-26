@@ -6,15 +6,15 @@
 /*! \def - creates format string and read values from setting
     with particular template
 */
-#define VIEX_T_READNEXT(TYPE, FRMSTR)\
+#define VIEX_T_READNEXT(TYPE, FRMSTR, FTNAME)\
     v = (u8 *) new TYPE[n];\
     fv = FRMSTR;\
-    ft = VIEX_T_2_STR(TYPE);\
+    ft = FTNAME;\
     szof = sizeof(TYPE);\
     io.readnext<TYPE>(&name, (TYPE *)v, n, &f);\
 
 /*! \brief conversion of all pamereter list to text
-    sytantax: name/'def|enum|min|max'('u8|char|double|bool|u64')=1,2,3,4,5,6,......
+    sytantax: name/'def|enum|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
 
     @param p[in] - binary data
     @param n[in] - length of data
@@ -37,15 +37,15 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
         switch(t){ //appropriate scan from stream
 
             default: return 0;
-            case VI_TYPE_BYTE:      VIEX_T_READNEXT(u8, "%d");      break;
-            case VI_TYPE_INTEGER:   VIEX_T_READNEXT(int, "%d");     break;
-            case VI_TYPE_BOOLEAN:   VIEX_T_READNEXT(bool, "%d");    break;
-            case VI_TYPE_INTEGER64: VIEX_T_READNEXT(u64, "%lld");   break;
-            case VI_TYPE_FLOAT:     VIEX_T_READNEXT(double, "%g");  break;
+            case VI_TYPE_BYTE:      VIEX_T_READNEXT(u8, "%d", "byte");      break;
+            case VI_TYPE_INTEGER:   VIEX_T_READNEXT(int, "%d", "int");     break;
+            case VI_TYPE_BOOLEAN:   VIEX_T_READNEXT(bool, "%d", "bool");    break;
+            case VI_TYPE_INTEGER64: VIEX_T_READNEXT(u64, "%lld", "long");   break;
+            case VI_TYPE_FLOAT:     VIEX_T_READNEXT(double, "%g", "float");  break;
             case VI_TYPE_CHAR:
                 //extra bypass for string
                 n += 1; //for /0
-                VIEX_T_READNEXT(char, "%s");
+                VIEX_T_READNEXT(char, "%s", "char");
                 v[n] = 0; n = 1;  //bypass
                 break;
         }
@@ -75,44 +75,52 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
     and write them to packet
 */
 #define VIEX_T_WRITENEXT(TYPE, FRMSTR, TMPT)\
-    if(!strcmp(s_type, VIEX_T_2_STR(TYPE))){\
+    {\
         TYPE v[n]; TMPT tmp; \
         for(int i=0; (1 == sscanf(w_cmd, FRMSTR, &tmp)) && (i < n); i++){\
             v[i] = (TYPE)tmp;\
             if((NULL == (w_cmd = strchr(w_cmd, ','))) || (w_cmd >= end))\
                 break;\
         }\
-        return VIEX_PARAM_LEN(TYPE, io.append<TYPE>(&name, v, n));\
-    }\
+        return VIEX_PARAM_LEN(TYPE, io.append<TYPE>(&name, v, n, f));\
+    }
 
 /*! \brief scans one parametr from text input
-    sytantax: name('u8|char|double|bool|u64')=1,2,3,4,5,6,......
+    syntax: name/'def|min|max|menu0|menu1...'('u8|char|float|bool|u64')=1,2,3,4,5,6,...
 
     @param p[out] - output data
     @param n[in] - space avaiable for data
     @param cmd[in] - command
     @param len[in] - command lenght
 */
-int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){  //v p musi byt predvyplneno na jaky typ prevadet!
+int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
 
     char name[VIEX_PARAM_NAME_SIZE];
-    char c, s_type[16];
+    char c, s_type[16], s_dtype[16];
+    t_vi_param_flags f = VI_TYPE_P_VAL;  //vaule type by default
 
     char *w_cmd = (char *)cmd;
     const char *end = cmd+len;
 
-    t_vi_param_stream io((u8 *)p, n); //interator init
-    if(3 != sscanf(cmd, "%s(%s)=%c", name, s_type, &c)){
+    t_vi_param_stream io((u8 *)p, n); //iterator init
+    if( (4 == sscanf(cmd, "%s/%s(%s)=%c", name, s_dtype, s_type, &c)) ||
+        (3 == sscanf(cmd, "%s(%s)=%c", name, s_type, &c)) ||    //vaule assumed
+        (2 == sscanf(cmd, "%s=%c", name, &c)) ){  //vaule & int assumed
+
+        if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
+        else if(0 == strcmp(s_dtype, "max")) f = VI_TYPE_P_MAX;
+        else if(0 == strcmp(s_dtype, "def")) f = VI_TYPE_P_DEF;
+        else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
 
         char *dlm = (w_cmd = strchr(cmd, '=')); //find equal mark
-        n = 0; while((dlm = strchr(dlm, ',')) != NULL) n += 1; //how many items are there?
+        n = 0; while((dlm) && (dlm = strchr(dlm, ',')) && (dlm < end)) n += 1; //how many items are there?
 
-        VIEX_T_WRITENEXT(u8, "%u", int);  //C90 doen't support %hhu
-        VIEX_T_WRITENEXT(u64, "%u", u32);  //either %Lu, grrr
-        VIEX_T_WRITENEXT(int, "%d", int);
-        VIEX_T_WRITENEXT(bool, "%d", int);   //no compiler supports bool
-        VIEX_T_WRITENEXT(double, "%lf", double);
-        n = strlen(cmd); VIEX_T_WRITENEXT(char, "%s", char); //+ bypass for string
+        if(0 == strcmp(s_type, "u8")) VIEX_T_WRITENEXT(u8, "%u", int)  //C90 doen't support %hhu
+        else if(0 == strcmp(s_type, "u64")) VIEX_T_WRITENEXT(u64, "%u", u32)  //either %Lu, grrr
+        else if(0 == strcmp(s_type, "bool")) VIEX_T_WRITENEXT(bool, "%d", int)   //no compiler supports bool
+        else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
+        else if(0 == strcmp(s_type, "char")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
+        else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
     }
 
     return 0;  //error
@@ -192,7 +200,7 @@ int vi_ex_hid::conv2dt(t_vi_exch_dgram *d, const char *cmd, int len){
         case VI_I_SETUP_GET:   //setting read and write
         case VI_I_SETUP_SET:
 
-            d->size = cf2hi(d->d, len, (char *)cmd, strlen(cmd));
+            d->size = cf2dt(d->d, len, (char *)cmd, strlen(cmd));
         break;
         default:
 

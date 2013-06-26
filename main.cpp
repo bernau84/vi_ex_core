@@ -25,15 +25,15 @@ protected:
 
     virtual void callback(vi_ex_io::t_vi_io_r event){
 
-        vi_ex_cell::callback(event);  //zpracuje vnitrni kontrolni pakety protokolu
+        vi_ex_cell::callback(event);  //has to be for procession internal protocol packets
         if(vi_ex_io::VI_IO_OK == event){
 
-            char rcv[VIEX_HID_SP];  //pakety aby byly potvrzeny tak se musi vycist
-            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){  //rx a prevvod do cloveciny
+            char rcv[VIEX_HID_SP];  //valid packed has to be read
+            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){  //rx and conversion to human text
 
                 char info[128];
-                snprintf(info, sizeof(info), "%s: rx cmd \"%s\"\r\n", name, rcv);  //vytisknem
-                debug(info);  //vypis do debugovaho okna
+                snprintf(info, sizeof(info), "%s: rx cmd \"%s\"\r\n", name, rcv);
+                debug(info);  //debug printout
             }
         }
     }
@@ -63,9 +63,9 @@ protected:
     }
 
 public:
-    vi_ex_fileio(std::ifstream *_is, std::ofstream *_os,    //kominikacni soubory
-                 p_vi_io_mn _name = NULL,   //nazem prvku
-                 std::fstream *_term = NULL) :  //terminalovy cloveci vstup/vystup
+    vi_ex_fileio(std::ifstream *_is, std::ofstream *_os,    //io files simulating physical layer
+                 p_vi_io_mn _name = NULL,   //name
+                 std::fstream *_term = NULL) :  //human terminal io
         vi_ex_cell(_name, _term), ist(_is), ost(_os){;}
 
     virtual ~vi_ex_fileio(){;}
@@ -98,8 +98,9 @@ void vi_test_wait10ms(void){
 
 int main(int argc, char *argv[])
 {
-    //jeden soubor je pro jeden nod otevren pro zapis pro druhy pro cteni
-    //simulace multiplexni sbernice (+ diky souborum mame archiv syrovych dat komunikace)
+    //onefile is opened as read second as write for 1. node
+    //opposite manner for 2. node
+    //we have full binary log of communication in log
     std::ifstream p1in("iotest_wr.bin", std::ifstream::binary);
     std::ofstream p1out("iotest_rw.bin", std::ofstream::binary);
 
@@ -109,22 +110,21 @@ int main(int argc, char *argv[])
     //human interface
     std::fstream term("hiterminal.txt", std::fstream::in | std::fstream::out | std::fstream::trunc);
 
-    //p2p komunikace
+    //p2p komunikation
     nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (p_vi_io_mn)"ND01", &term);
     nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (p_vi_io_mn)"ND02");
 
     std::string remote("ND02");
     nod1->pair(remote);
 
-   if(term.is_open()){
+    if(term.is_open()){
 
-        term << "ECHO"; nod1->refreshcmdln();  //povel z prikazove radky
-        term << "\r\n"; nod1->refreshcmdln();  //povel z prikazove radky, ted
-        term.flush();
-   }
-//    std::string cmd("CAPAB");
-//    std::string icapab = nod1->command(cmd);  //primy povel
-//    std::cout << icapab;
+        term << "ECHO"; nod1->refreshcmdln();
+        term << "\r\n"; nod1->refreshcmdln();  //command is complet
+    }
 
-    return 0;
+    std:string dcmd("SET valuename(int)=60");
+    std::cout << nod1->command(dcmd); //direct command
+
+   return 0;
 }

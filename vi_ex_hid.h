@@ -6,7 +6,7 @@
 #include "vi_ex_par.h"
 
 #define VIEX_HID_TR(NAME, VAL)
-#define VIEX_HID_SP 8192
+#define VIEX_HID_SP 256
 
 /*!
     \class vi_ex_hid
