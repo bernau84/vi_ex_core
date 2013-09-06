@@ -254,7 +254,7 @@ public:
         u8 *tmp = it + VIEX_PARAM_HEAD();
         for(st.length = 0; (st.length < (u32)len) && ((void *)tmp < (void *)end); st.length++){
 
-            memcpy(tmp, val, t_vi_param_type_lut[st.type].sz);
+            memcpy(tmp, val, vsz);
             tmp += vsz; val ++;
         }
 

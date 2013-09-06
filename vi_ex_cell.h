@@ -181,7 +181,7 @@ public:
 
         char rcv[VIEX_HID_SP];
         if(vi_ex_hid::submit(ord.c_str()) == vi_ex_io::VI_IO_OK)  //translate to binary
-            if(vi_ex_hid::receive(rcv) == vi_ex_io::VI_IO_OK) //wait for reply & translate to text
+            if(vi_ex_hid::receive(rcv, VIEX_HID_SP) == vi_ex_io::VI_IO_OK) //wait for reply & translate to text
                 return std::string(rcv); //return
 
         return std::string();  //fail

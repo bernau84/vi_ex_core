@@ -24,18 +24,18 @@ private:
 public:
     vi_ex_io::t_vi_io_r submit(const char *cmd, int len = VIEX_HID_SP, int timeout = VI_IO_WAITMS_T){
 
-        char space[len]; //space for text
-        t_vi_exch_dgram *d = (t_vi_exch_dgram *)space;
-        conv2dt(d, cmd, sizeof(space));
+        u8 space[VIEX_HID_SP]; //space for text
+        t_vi_exch_dgram *d = vi_ex_io::preparetx(space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
+        conv2dt(d, cmd, (len) ? len : strlen(cmd));
         return vi_ex_io::submit(d, timeout);
     }
 
-    vi_ex_io::t_vi_io_r receive(char *cmd, int len = VIEX_HID_SP, int timeout = VI_IO_WAITMS_T){
+    vi_ex_io::t_vi_io_r receive(char *cmd, int len, int timeout = VI_IO_WAITMS_T){
 
-        u8 space[len];  //space for data
+        u8 space[VIEX_HID_SP];  //space for data
         t_vi_exch_dgram *d = vi_ex_io::preparerx(space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
         vi_ex_io::t_vi_io_r ret = vi_ex_io::receive(d, timeout);
-        conv2hi(d, cmd, sizeof(space));
+        conv2hi(d, cmd, len);
         return ret;
     }
 

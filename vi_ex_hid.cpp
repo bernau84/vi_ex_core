@@ -77,7 +77,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
 #define VIEX_T_WRITENEXT(TYPE, FRMSTR, TMPT)\
     {\
         TYPE v[n]; TMPT tmp; \
-        for(int i=0; (1 == sscanf(w_cmd, FRMSTR, &tmp)) && (i < n); i++){\
+        for(int i=0; (1 == sscanf(w_cmd+1, FRMSTR, &tmp)) && (i < n); i++){\
             v[i] = (TYPE)tmp;\
             if((NULL == (w_cmd = strchr(w_cmd, ','))) || (w_cmd >= end))\
                 break;\
@@ -93,19 +93,20 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
     @param cmd[in] - command
     @param len[in] - command lenght
 */
+#define HID_TYPE_N  16
 int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
 
     char name[VIEX_PARAM_NAME_SIZE];
-    char c, s_type[16], s_dtype[16];
+    char c, s_type[HID_TYPE_N+1], s_dtype[HID_TYPE_N+1] = "";
     t_vi_param_flags f = VI_TYPE_P_VAL;  //vaule type by default
 
     char *w_cmd = (char *)cmd;
     const char *end = cmd+len;
 
     t_vi_param_stream io((u8 *)p, n); //iterator init
-    if( (4 == sscanf(cmd, "%s/%s(%s)=%c", name, s_dtype, s_type, &c)) ||
-        (3 == sscanf(cmd, "%s(%s)=%c", name, s_type, &c)) ||    //vaule assumed
-        (2 == sscanf(cmd, "%s=%c", name, &c)) ){  //vaule & int assumed
+    if( (4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)) ||
+        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||    //vaule assumed
+        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) ){  //vaule & int assumed
 
         if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
         else if(0 == strcmp(s_dtype, "max")) f = VI_TYPE_P_MAX;
@@ -113,7 +114,7 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
         else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
 
         char *dlm = (w_cmd = strchr(cmd, '=')); //find equal mark
-        n = 0; while((dlm) && (dlm = strchr(dlm, ',')) && (dlm < end)) n += 1; //how many items are there?
+        n = 1; while((dlm) && (dlm = strchr(dlm, ',')) && (dlm < end)) n += 1; //how many items are there?
 
         if(0 == strcmp(s_type, "u8")) VIEX_T_WRITENEXT(u8, "%u", int)  //C90 doen't support %hhu
         else if(0 == strcmp(s_type, "u64")) VIEX_T_WRITENEXT(u64, "%u", u32)  //either %Lu, grrr
@@ -121,6 +122,15 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
         else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
         else if(0 == strcmp(s_type, "char")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
         else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
+
+//        int v[n]; int tmp;
+//        for(int i=0; (1 == sscanf(w_cmd+1, "%d", &tmp)) && (i < n); i++){
+//            v[i] = (int)tmp;
+//            if((NULL == (w_cmd = strchr(w_cmd, ','))) || (w_cmd >= end))
+//                break;
+//        }
+//        tmp = io.append<int>(&name, v, n, f);
+//        return VIEX_PARAM_LEN(int, tmp);
     }
 
     return 0;  //error
@@ -199,8 +209,12 @@ int vi_ex_hid::conv2dt(t_vi_exch_dgram *d, const char *cmd, int len){
         case VI_I:     //echo
         case VI_I_SETUP_GET:   //setting read and write
         case VI_I_SETUP_SET:
-
-            d->size = cf2dt(d->d, len, (char *)cmd, strlen(cmd));
+        {
+            char *par = (char *)cmd;
+            while((*par > 32) && (len > 0)){ par++; len--; }    //move behind command
+            while((*par <= 32) && (len > 0)){ par++; len--; }   //move behind white spaces
+            d->size = cf2dt(d->d, d->size, par, len);
+        }
         break;
         default:
 

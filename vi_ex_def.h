@@ -13,6 +13,9 @@
 #define s32	signed int
 #define s64	signed long int
 
+#define _DEF2STR(D) #D
+#define DEF2STR(D) _DEF2STR(D)
+
 #define VI_ENUMER_SZ    2
 #define VI_MARKER_SZ    4
 #define VI_CRC_SZ       4  //4 is maximum
@@ -257,21 +260,22 @@ inline bool vi_dg_deserialize(t_vi_exch_dgram *d, const u8 *p, u32 n){
     memset(d, 0, VI_HLEN());  //for the non writen bytes in enum larger than VI_ENUMER_SZ
 
 #define VI_H_ITEM(name, type, sz)\
-    memcpy(&(d->name), p, sz);\
-    n -= sz; p += sz;\
+    if(n >= sz){ memcpy(&(d->name), p, sz);\
+    n -= sz; p += sz; } else n = 0;\
 
 #include "vi_ex_def_dgram_head.inc"
 #undef VI_H_ITEM
 
-    if((d->size <= free)){  //payload in p is complete and its size is <= free space
+    if(n < free) free = n;
+    if(d->size <= free){  //payload in p is complete and its size is <= free space
 
-       memcpy(&(d->d), p, d->size);
-       return true;
-   } else {
+        memcpy(&(d->d), p, d->size);
+        return true;
+    } else {
 
-       memcpy(&(d->d), p, free);
-       return false;
-   }
+        memcpy(&(d->d), p, free);
+        return false;
+    }
 }
 
 #endif // VI_EX_DEF_H
