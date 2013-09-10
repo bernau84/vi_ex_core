@@ -261,15 +261,11 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
             if((d->type == VI_ANY) || (d->type == dg.type)){  //ten na ktery cekame
 
 #ifdef VI_LINK_ACK
-                if((d->type >= VI_I) && (0 == (d->type & VI_ACK))){  //paket s potrvzenim?
+                if((dg.type >= VI_I) && (0 == (dg.type & VI_ACK))){  //paket s potrvzenim (ale ne potrvzovaci paket)
 
                     t_vi_exch_dgram ack;
                     preparetx((u8 *)&ack, VI_ACK, 0, dg.sess_id);
-                    u8 sack[VI_LEN(&ack)];
-                    vi_dg_serialize(&ack, sack, VI_LEN(&ack));  //packet -> dgram
-
-                    write(sack, VI_LEN(&ack));  //send imediately
-                    VI_DMSG("tx ack / no%d", dg.sess_id);
+                    submit(&ack, 0);
                 }
 #endif // VI_LINK_ACK
 

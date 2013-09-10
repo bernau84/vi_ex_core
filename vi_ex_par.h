@@ -155,6 +155,7 @@ private:
         u32 n = end - it;
         u8 *p = it;
 
+        memset(d, 0, sizeof(t_vi_param));
 #define VI_S_ITEM(name, type, sz)\
         memcpy(&(d->name), p, sz);\
         n -= sz; p += sz;\
@@ -272,7 +273,7 @@ public:
     template <typename T> int readnext(p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags *f = 0){
 
         if(!name || !val) return -1; //fatal
-        if(!isvalid()) return 0; //error at the end of records
+        if(VI_TYPE_UNKNOWN == isvalid()) return 0; //error at the end of records
 
         t_vi_param st; deserialize_head(&st);
 

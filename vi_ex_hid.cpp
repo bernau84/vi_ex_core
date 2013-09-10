@@ -6,15 +6,19 @@
 /*! \def - creates format string and read values from setting
     with particular template
 */
-#define VIEX_T_READNEXT(TYPE, FRMSTR, FTNAME)\
+#define VIEX_T_READNEXT(TYPE, FTNAME)\
     v = (u8 *) new TYPE[n];\
-    fv = FRMSTR;\
     ft = FTNAME;\
     szof = sizeof(TYPE);\
     io.readnext<TYPE>(&name, (TYPE *)v, n, &f);\
 
+#define VIEX_T_PRINTOUT(TYPE, FTSTR)\
+    for(int i = 0; (m < len) && (i < n); ){\
+    m += snprintf(&cmd[m], len-m, FTSTR, *(TYPE *)(v+szof*i));\
+    if(++i < n) m += snprintf(&cmd[m], len-m, ",");}\
+
 /*! \brief conversion of all pamereter list to text
-    sytantax: name/'def|enum|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
+    syntax: name/'def|enum|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
 
     @param p[in] - binary data
     @param n[in] - length of data
@@ -37,15 +41,15 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
         switch(t){ //appropriate scan from stream
 
             default: return 0;
-            case VI_TYPE_BYTE:      VIEX_T_READNEXT(u8, "%d", "byte");      break;
-            case VI_TYPE_INTEGER:   VIEX_T_READNEXT(int, "%d", "int");     break;
-            case VI_TYPE_BOOLEAN:   VIEX_T_READNEXT(bool, "%d", "bool");    break;
-            case VI_TYPE_INTEGER64: VIEX_T_READNEXT(u64, "%lld", "long");   break;
-            case VI_TYPE_FLOAT:     VIEX_T_READNEXT(double, "%g", "float");  break;
+            case VI_TYPE_BYTE:      VIEX_T_READNEXT(u8, "byte");        break;
+            case VI_TYPE_INTEGER:   VIEX_T_READNEXT(int, "int");        break;
+            case VI_TYPE_BOOLEAN:   VIEX_T_READNEXT(bool, "bool");      break;
+            case VI_TYPE_INTEGER64: VIEX_T_READNEXT(u64, "long");       break;
+            case VI_TYPE_FLOAT:     VIEX_T_READNEXT(double, "float");   break;
             case VI_TYPE_CHAR:
                 //extra bypass for string
                 n += 1; //for /0
-                VIEX_T_READNEXT(char, "%s", "char");
+                VIEX_T_READNEXT(char, "char");
                 v[n] = 0; n = 1;  //bypass
                 break;
         }
@@ -60,8 +64,16 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
         }
 
         //array item by item iteration
-        for(int i = 0; ((m += snprintf(&cmd[m], len-m, fv, v+szof*i)) < len) && (i < n); i++)
-            m += snprintf(&cmd[m], len-m, ",");    //delimiter append
+        switch(t){
+
+            default: return 0;
+            case VI_TYPE_BYTE:      VIEX_T_PRINTOUT(u8, "%d");      break;
+            case VI_TYPE_INTEGER:   VIEX_T_PRINTOUT(int, "%d");     break;
+            case VI_TYPE_BOOLEAN:   VIEX_T_PRINTOUT(bool, "%d");    break;
+            case VI_TYPE_INTEGER64: VIEX_T_PRINTOUT(u64, "%lld");   break;
+            case VI_TYPE_FLOAT:     VIEX_T_PRINTOUT(double, "%g");  break;
+            case VI_TYPE_CHAR:      VIEX_T_PRINTOUT(char, "%s");    break;
+        }
 
         if(v) delete[] v;
         v = NULL;
@@ -122,15 +134,6 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
         else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
         else if(0 == strcmp(s_type, "char")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
         else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
-
-//        int v[n]; int tmp;
-//        for(int i=0; (1 == sscanf(w_cmd+1, "%d", &tmp)) && (i < n); i++){
-//            v[i] = (int)tmp;
-//            if((NULL == (w_cmd = strchr(w_cmd, ','))) || (w_cmd >= end))
-//                break;
-//        }
-//        tmp = io.append<int>(&name, v, n, f);
-//        return VIEX_PARAM_LEN(int, tmp);
     }
 
     return 0;  //error
