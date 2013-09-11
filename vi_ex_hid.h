@@ -27,6 +27,11 @@ public:
         u8 space[VIEX_HID_SP]; //space for text
         t_vi_exch_dgram *d = vi_ex_io::preparetx(space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
         conv2dt(d, cmd, (len) ? len : strlen(cmd));
+
+        char info[128];
+        snprintf(info, sizeof(info), "tx cmd \"%s\"\r\n", cmd);
+        debug(info);  //debug printout
+
         return vi_ex_io::submit(d, timeout);
     }
 
@@ -36,10 +41,15 @@ public:
         t_vi_exch_dgram *d = vi_ex_io::preparerx(space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
         vi_ex_io::t_vi_io_r ret = vi_ex_io::receive(d, timeout);
         conv2hi(d, cmd, len);
+
+        char info[128];
+        snprintf(info, sizeof(info), "rx cmd \"%s\"\r\n", cmd);
+        debug(info);  //debug printout
+
         return ret;
     }
 
-    vi_ex_hid(p_vi_io_mn _name = 0):vi_ex_io(_name){;}
+    vi_ex_hid():vi_ex_io(){;}
     virtual ~vi_ex_hid(){;}
 };
 

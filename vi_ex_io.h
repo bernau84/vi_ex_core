@@ -21,11 +21,6 @@
  */
 #define VI_LINK_ACK
 
-
-#define VI_NAME_SZ      (VI_MARKER_SZ + 1)
-typedef char (t_vi_io_mn)[VI_NAME_SZ];
-typedef t_vi_io_mn *p_vi_io_mn;
-
 /*!
     \class vi_ex_io
     \brief parser and dispatcher of viex packets
@@ -52,16 +47,16 @@ public:
 
 private:
     static u32 cref;  /*!< reference counter */
-    
-    volatile bool reading; /*!< rx queue reading lock */
-    volatile u32 sess_id;  /*!< incremental packet id */
+
+    bool reading; /*!< rx queue reading lock */
+    u32 sess_id;  /*!< incremental packet id */
+    u32 node_id;  /*!< number of node (for debug) */
 
     u8 *imem;   /*!< internal memory for receiving */
     u8 *omem;   /*!< internal memory for retransmit */
 
 protected:
     t_vi_io_id mark;  /*!< see t_vi_exch_dgram::mark */
-    t_vi_io_mn name;  /*!< unique node name on bus */
 
     t_vi_io_r parser(u32 offs = 0);  /*!< single pass parser */
     t_vi_io_r resend();  /*!< resend last packet if resend time elapsed an no ack received */
@@ -174,7 +169,7 @@ public:
     */
     t_vi_io_r receive(t_vi_exch_dgram *d, int timeout = VI_IO_WAITMS_T);
 
-    vi_ex_io(p_vi_io_mn _name = 0, int iosize = VI_IO_I_BUF_SZ); /*!< default name is created from reference counter */
+    vi_ex_io(int iosize = VI_IO_I_BUF_SZ); /*!< default name is created from reference counter */
     virtual ~vi_ex_io();
 };
 

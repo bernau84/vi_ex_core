@@ -30,7 +30,7 @@ protected:
 
 public:	
 	
-    vi_ex_iom(t_vi_io_mn _name) : t_vi_io(_name, 0) {  //no allocation buffers in ancestor
+    vi_ex_iom() : t_vi_io(0) {  //no allocation buffers in ancestor
 
         if(g_rdbuf) rdBuf = new circbuffer<u8>(*g_rdbuf);  //uses copy constructor
         if(g_wrbuf) wrBuf = new circbuffer<u8>(*g_wrbuf);

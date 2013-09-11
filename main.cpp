@@ -29,11 +29,8 @@ protected:
         if(vi_ex_io::VI_IO_OK == event){
 
             char rcv[VIEX_HID_SP];  //valid packed has to be read
-            if(vi_ex_io::VI_IO_OK == receive(rcv, VIEX_HID_SP)){  //rx and conversion to human text
+            if(vi_ex_io::VI_IO_OK == vi_ex_hid::receive(rcv, VIEX_HID_SP)){  //rx and conversion to human text
 
-                char info[128];
-                snprintf(info, sizeof(info), "%s: rx cmd \"%s\"\r\n", name, rcv);
-                debug(info);  //debug printout
             }
         }
     }
@@ -124,7 +121,9 @@ int main(int argc, char *argv[])
     }
 
     std:string dcmd("SET valuename(int)=60");
-    std::cout << nod1->command(dcmd); //direct command
+
+    for(int i=0; i<1000; i++)
+        nod1->command(dcmd); //direct command
 
    return 0;
 }

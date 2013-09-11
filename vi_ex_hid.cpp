@@ -13,9 +13,10 @@
     io.readnext<TYPE>(&name, (TYPE *)v, n, &f);\
 
 #define VIEX_T_PRINTOUT(TYPE, FTSTR)\
-    for(int i = 0; (m < len) && (i < n); ){\
-    m += snprintf(&cmd[m], len-m, FTSTR, *(TYPE *)(v+szof*i));\
-    if(++i < n) m += snprintf(&cmd[m], len-m, ",");}\
+    for(int l = 0, i = 0; (m < len) && (i < n); m += l, i++){\
+    l = snprintf(&cmd[m], len-m, FTSTR, *(TYPE *)(v+szof*i));\
+    if(l > (len-m)) l = (len-m);\
+    else if((i+1) < n) cmd[m + l++] = ','; }\
 
 /*! \brief conversion of all pamereter list to text
     syntax: name/'def|enum|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
@@ -33,7 +34,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
 
     int m = 0, szof = 0;
     u8 *v = NULL;
-    const char *ft = "", *fv = "";
+    const char *ft = "";
 
     t_vi_param_stream io((u8 *)p, n);
     while(((t = io.isvalid(&n)) != VI_TYPE_UNKNOWN) && (m < len)){  //through all param
@@ -64,22 +65,26 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
         }
 
         //array item by item iteration
-        switch(t){
+        if((m > 0) && (len > m))
+            switch(t){
 
-            default: return 0;
-            case VI_TYPE_BYTE:      VIEX_T_PRINTOUT(u8, "%d");      break;
-            case VI_TYPE_INTEGER:   VIEX_T_PRINTOUT(int, "%d");     break;
-            case VI_TYPE_BOOLEAN:   VIEX_T_PRINTOUT(bool, "%d");    break;
-            case VI_TYPE_INTEGER64: VIEX_T_PRINTOUT(u64, "%lld");   break;
-            case VI_TYPE_FLOAT:     VIEX_T_PRINTOUT(double, "%g");  break;
-            case VI_TYPE_CHAR:      VIEX_T_PRINTOUT(char, "%s");    break;
-        }
+                default: return 0;
+                case VI_TYPE_BYTE:      VIEX_T_PRINTOUT(u8, "%d");      break;
+                case VI_TYPE_INTEGER:   VIEX_T_PRINTOUT(int, "%d");     break;
+                case VI_TYPE_BOOLEAN:   VIEX_T_PRINTOUT(bool, "%d");    break;
+                case VI_TYPE_INTEGER64: VIEX_T_PRINTOUT(u64, "%lld");   break;
+                case VI_TYPE_FLOAT:     VIEX_T_PRINTOUT(double, "%g");  break;
+                case VI_TYPE_CHAR:
+                    //extra bypass for string - we know there is only 1 item
+                    m += snprintf(&cmd[m], len-m, "%s", (char *)v);
+                    break;
+            }
 
         if(v) delete[] v;
         v = NULL;
     }
 
-    return m;
+    return (len > m) ? len : m;
 }
 
 
@@ -161,7 +166,7 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
             n = snprintf(cmd, len, " ");
             len -= n; cmd += n;
 
-            for(u32 i=0; i<d->size; i++){
+            for(u32 i=0; (n > 0) && (len > 0) && (i<d->size); i++){
 
                 if(d->d[i] > 32) n = snprintf(cmd, len, "%c", d->d[i]);
                     else n = snprintf(cmd, len, "\\x%x", d->d[i]); //non ascii -> hex
@@ -172,7 +177,7 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
         case VI_I:      //ack data - test of connection
         case VI_BULK: 	//unstructured/unacknowledge data
 
-            for(u32 i=0; i<d->size; i++){
+            for(u32 i=0; (n > 0) && (len > 0) && (i<d->size); i++){
 
                 n = snprintf(cmd, len, " %x(%c)", d->d[i], d->d[i]); //unknown data; convert to hex
                 len -= n; cmd += n;

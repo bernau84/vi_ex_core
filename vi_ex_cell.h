@@ -14,6 +14,11 @@
 #include <new>          // std::bad_alloc
 #include <iostream>  //cout
 
+
+#define VI_NAME_SZ      (255 + 1)
+typedef char (t_vi_io_mn)[VI_NAME_SZ];
+typedef t_vi_io_mn *p_vi_io_mn;
+
 /*!
     \class vi_ex_cell
     \brief high level function for viex node; uses stl
@@ -29,6 +34,7 @@ class vi_ex_cell : public vi_ex_hid
 private:
     u8 *p_cap;  /*!< backup of binary capabilities of other side */
     int sz_cap;
+    t_vi_io_mn name;  /*!< unique node name on bus */
 
     std::iostream *p_hi;  /*!< human terminal; enter for text commands and responses */
     std::ostream *p_trace;  /*!< trace output */
@@ -74,12 +80,12 @@ private:
         \param action[in] - 0 - read request
             1 - read and wait for reply
             2 - write param request
-            3 - write param and for reply
+            3 - write param and wait for reply
     */
     template <typename T> std::vector<T> setup(std::string &name, std::vector<T> &v, u8 action){
 
         std::vector<T> confr;
-        std::vector<T> d = params<T>(name, VI_TYPE_P_DEF); //defaul param for size determination
+        std::vector<T> d = params<T>(name, VI_TYPE_P_DEF); //default param for size determination
         int N = (v.size() > d.size()) ? v.size() : d.size();  //choose bigger
         t_vi_exch_type t = (action > 1) ? VI_I_SETUP_GET : VI_I_SETUP_SET;
 
@@ -241,8 +247,9 @@ public:
     bool pair(std::string &remote);
 
     vi_ex_cell(p_vi_io_mn _name, std::iostream *_p_hi = NULL, std::ostream *_p_trace = &std::cout):
-        vi_ex_hid(_name), p_hi(_p_hi), p_trace(_p_trace){ 
+        vi_ex_hid(), p_hi(_p_hi), p_trace(_p_trace){
     
+        memcpy(name, _name, sizeof(t_vi_io_mn));
         p_cap = NULL;
         sz_cap = 0;
     }

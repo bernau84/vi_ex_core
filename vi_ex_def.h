@@ -66,13 +66,14 @@ const struct t_vi_exch_cmd{
     t_vi_exch_type    type;
 } vi_exch_cmd[] = {  //text command definition
 
-    {"ECHO",      VI_ECHO_REQ},
-    {"{echo}",    VI_ECHO_REP},
-    {"{register}",    VI_REG},
+    {"ECHO",        VI_ECHO_REQ},
+    {"{echo}",      VI_ECHO_REP},
+    {"{register}",  VI_REG},
     {"{bulk}",      VI_BULK},
-    {"CAPAB",     VI_I_CAP},
-    {"SET",       VI_I_SETUP_SET},  //example: SET Contrast 30
-    {"GET",       VI_I_SETUP_GET},  //example: GET Brightness
+    {"CAPAB",       VI_I_CAP},
+    {"SET",         VI_I_SETUP_SET},  //example: SET Contrast 30
+    {"GET",         VI_I_SETUP_GET},  //example: GET Brightness
+    {"{ack}",       VI_ACK},
     {"UNKNOWN", (t_vi_exch_type)0}  //end mark
 };
 

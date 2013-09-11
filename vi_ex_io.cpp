@@ -8,19 +8,15 @@ u32 vi_ex_io::cref;  //static has to be declared extra
 #define VI_DMSG(...) \
 { \
     char arg[256]; snprintf(arg, sizeof(arg), __VA_ARGS__); \
-    char msg[256]; snprintf(msg, sizeof(msg), "%s: %s\n", (char *)name, arg); \
+    char msg[256]; snprintf(msg, sizeof(msg), "ref %d: %s\n\r", node_id, arg); \
     debug(msg); \
 } \
 
-vi_ex_io::vi_ex_io(p_vi_io_mn _name, int iosize){
+vi_ex_io::vi_ex_io(int iosize){
 
     reading = 0;
     sess_id = 0;
-    cref++;
-
-    //default identification with ref. counter
-    if(_name == NULL) snprintf(name, sizeof(name), "%04d", cref);
-        else memcpy(name, _name, sizeof(name));
+    node_id = cref++;
 
     memset(mark, 0, sizeof(mark)); // == receive everything by default
 
@@ -64,7 +60,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
             rdBuf->write(rd, rn);  //write to rx circular buffer; shifts write pointer
     } while(rn == sizeof(rd));
 
-    u32 n = rdBuf->rdAvail();  //all byte in rx
+    int n = rdBuf->rdAvail();  //all byte in rx
     //VI_DMSG("Nod%d Rx avail %dB\n", id, n);
 
     if(!n) return VI_IO_FAIL;
@@ -84,7 +80,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
             vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
 
             rn = VI_LEN(&dg);
-            if(rn >= rdBuf->size) //size sanity check
+            if(rn >= (int)rdBuf->size) //size sanity check
                 goto PARSER_TRASH_IT; //some nonsense
 
             if(n >= rn){  //is it whole?
@@ -92,7 +88,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
                 //read again begin of payload if any
                 if(dg.size){
 
-                    rn = (rn < sizeof(sdg)) ? rn : sizeof(sdg); //limit n
+                    rn = (rn < (int)sizeof(sdg)) ? rn : sizeof(sdg); //limit n
                     rdBuf->get(0, sdg, rn);
                 }
 
@@ -186,7 +182,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
     }
 
 #ifdef VI_LINK_ACK
-    if((timeout) && ((d->type & ~VI_ACK) < VI_I)) //chceme potrvzeni?
+    if((timeout == 0) || ((d->type & ~VI_ACK) < VI_I)) //chceme potrvzeni?
 #endif // VI_LINK_ACK        
         return VI_IO_OK;
 
@@ -219,6 +215,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
             if((VI_ACK & dg.type) && (d->sess_id == dg.sess_id)){   //ack to last packet?
 
                 VI_DMSG("rx ack / no%d", dg.sess_id);
+                if(lo) unlock();
                 return VI_IO_OK;
             } else {
 
