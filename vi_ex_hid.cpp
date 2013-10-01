@@ -19,7 +19,7 @@
     else if((i+1) < n) cmd[m + l++] = ','; }\
 
 /*! \brief conversion of all pamereter list to text
-    syntax: name/'def|enum|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
+    syntax: name/'def|enum|min|max'('byte|int|string|float|bool|long')=1,2,3,4,5,6,......
 
     @param p[in] - binary data
     @param n[in] - length of data
@@ -50,7 +50,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
             case VI_TYPE_CHAR:
                 //extra bypass for string
                 n += 1; //for /0
-                VIEX_T_READNEXT(char, "char");
+                VIEX_T_READNEXT(char, "string");
                 v[n] = 0; n = 1;  //bypass
                 break;
         }
@@ -103,7 +103,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
     }
 
 /*! \brief scans one parametr from text input
-    syntax: name/'def|min|max|menu0|menu1...'('u8|char|float|bool|u64')=1,2,3,4,5,6,...
+    syntax: name/'def|min|max|menu0|menu1...'('u8|string|float|bool|u64')=1,2,3,4,5,6,...
 
     @param p[out] - output data
     @param n[in] - space avaiable for data
@@ -137,7 +137,7 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
         else if(0 == strcmp(s_type, "u64")) VIEX_T_WRITENEXT(u64, "%u", u32)  //either %Lu, grrr
         else if(0 == strcmp(s_type, "bool")) VIEX_T_WRITENEXT(bool, "%d", int)   //no compiler supports bool
         else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
-        else if(0 == strcmp(s_type, "char")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
+        else if(0 == strcmp(s_type, "string")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
         else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
     }
 

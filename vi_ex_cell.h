@@ -183,7 +183,7 @@ public:
     /*! \brief text command
         \return text response
     */
-    std::string command(std::string &ord){
+    std::string command(const std::string &ord){
 
         char rcv[VIEX_HID_SP];
         if(vi_ex_hid::submit(ord.c_str()) == vi_ex_io::VI_IO_OK)  //translate to binary
