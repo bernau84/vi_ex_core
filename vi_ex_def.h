@@ -70,7 +70,7 @@ const struct t_vi_exch_cmd{
     {"{echo}",      VI_ECHO_REP},
     {"{register}",  VI_REG},
     {"{bulk}",      VI_BULK},
-    {"CAPAB",       VI_I_CAP},
+    {"CAP",         VI_I_CAP},
     {"SET",         VI_I_SETUP_SET},  //example: SET Contrast 30
     {"GET",         VI_I_SETUP_GET},  //example: GET Brightness
     {"{ack}",       VI_ACK},

@@ -51,7 +51,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
                 //extra bypass for string
                 n += 1; //for /0
                 VIEX_T_READNEXT(char, "string");
-                v[n] = 0; n = 1;  //bypass
+                v[n-1] = 0; n = 1;  //bypass
                 break;
         }
 
@@ -96,7 +96,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
         TYPE v[n]; TMPT tmp; \
         for(int i=0; (1 == sscanf(w_cmd+1, FRMSTR, &tmp)) && (i < n); i++){\
             v[i] = (TYPE)tmp;\
-            if((NULL == (w_cmd = strchr(w_cmd, ','))) || (w_cmd >= end))\
+            if((NULL == (w_cmd = strchr(w_cmd+1, ','))) || (w_cmd >= end))\
                 break;\
         }\
         return VIEX_PARAM_LEN(TYPE, io.append<TYPE>(&name, v, n, f));\
@@ -117,7 +117,7 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
     char c, s_type[HID_TYPE_N+1], s_dtype[HID_TYPE_N+1] = "";
     t_vi_param_flags f = VI_TYPE_P_VAL;  //vaule type by default
 
-    char *w_cmd = (char *)cmd;
+    const char *w_cmd = cmd;
     const char *end = cmd+len;
 
     t_vi_param_stream io((u8 *)p, n); //iterator init
@@ -130,14 +130,14 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
         else if(0 == strcmp(s_dtype, "def")) f = VI_TYPE_P_DEF;
         else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
 
-        char *dlm = (w_cmd = strchr(cmd, '=')); //find equal mark
-        n = 1; while((dlm) && (dlm = strchr(dlm, ',')) && (dlm < end)) n += 1; //how many items are there?
+        const char *dlm = (w_cmd = strchr(cmd, '=')); //find equal mark
+        n = 1; while((dlm) && (dlm = strchr(dlm+1, ',')) && (dlm < end)) n += 1; //how many items are there?
 
-        if(0 == strcmp(s_type, "u8")) VIEX_T_WRITENEXT(u8, "%u", int)  //C90 doen't support %hhu
+        if(0 == strcmp(s_type, "byte")) VIEX_T_WRITENEXT(u8, "%u", int)  //C90 doen't support %hhu
         else if(0 == strcmp(s_type, "u64")) VIEX_T_WRITENEXT(u64, "%u", u32)  //either %Lu, grrr
         else if(0 == strcmp(s_type, "bool")) VIEX_T_WRITENEXT(bool, "%d", int)   //no compiler supports bool
         else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
-        else if(0 == strcmp(s_type, "string")) return VIEX_PARAM_LEN(char, io.append<char>(&name, w_cmd, strlen(w_cmd), f)); //direct write for string
+        else if(0 == strcmp(s_type, "string")) return VIEX_PARAM_LEN(char, io.append<char>(&name, (char *)(w_cmd+1), strlen(w_cmd), f)); //direct write for string
         else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
     }
 
@@ -217,6 +217,7 @@ int vi_ex_hid::conv2dt(t_vi_exch_dgram *d, const char *cmd, int len){
         case VI_I:     //echo
         case VI_I_SETUP_GET:   //setting read and write
         case VI_I_SETUP_SET:
+        case VI_I_CAP:
         {
             char *par = (char *)cmd;
             while((*par > 32) && (len > 0)){ par++; len--; }    //move behind command

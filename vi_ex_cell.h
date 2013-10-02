@@ -59,7 +59,7 @@ private:
             int n; reader.isvalid(&n); //vime ze je v poradku - jen chceme velikost
             T *tv = new T[n];
             n = reader.readnext<T>(&lname, tv, n);
-            for(int i=0; i<n; i++) v.push_back(tv[i]);
+            v.assign(tv, tv+n);
             delete[] tv;
         }
         return v;
@@ -134,7 +134,7 @@ public:
         std::vector<T> v(3);
         v[0] = param<T>(name, VI_TYPE_P_MIN);
         v[1] = param<T>(name, VI_TYPE_P_MAX);
-        v[2] = param<T>(name, VI_TYPE_P_RANGE2) - v[0];
+        v[2] = param<T>(name, VI_TYPE_P_VAL2) - v[0];
         return v;
     }
 

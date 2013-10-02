@@ -59,17 +59,17 @@ const struct {
   \enum t_vi_param_flags
   \brief description of actual and default parametr values type
 
-  range definition - MIN, RANGE2(== MIN + STEP), MAX
-  enum definition - MIN, RANGE2, RANGE3, RANGE4 ..etc
+  range definition - MIN, VAL2(== MIN + STEP), MAX
+  enum definition - MIN(== VAL1), VAL2, VAL3, VAL4 ..etc
 */
 typedef enum {
 
-    VI_TYPE_P_VAL = 0,   /**< actual value */
-    VI_TYPE_P_MIN = 1,   /**< minimum or first enum option */
-    VI_TYPE_P_RANGE2 = 2, /**< min+step or second enum option  */
-    VI_TYPE_P_RANGE3 = 3, /**< third enum option (4, 5. ..up to 254 possible enum values) */
+    VI_TYPE_P_VAL = 0,    /**< actual value */
+    VI_TYPE_P_MIN = 1,    /**< minimum or first enum option */
+    VI_TYPE_P_VAL2 = 2,   /**< min+step or second enum option  */
+    VI_TYPE_P_VAL3 = 3,   /**< third enum option (4, 5. ..up to 254 possible enum values) */
     VI_TYPE_P_MAX = 254,  /**< maximum or last enum opion */
-    VI_TYPE_P_DEF = 255  /**< default */
+    VI_TYPE_P_DEF = 255   /**< default */
 } t_vi_param_flags;
 
 #define VIEX_PARAM_NAME_SIZE    32
@@ -197,7 +197,7 @@ public:
     /*!
         find and set pointer to parametr of name
     */
-    t_vi_param_type setpos(p_vi_param_mn name){
+    t_vi_param_type setpos(const p_vi_param_mn name){
 
         if(!name) return VI_TYPE_UNKNOWN; //fatal
 
@@ -218,7 +218,7 @@ public:
     /*!
         find and set pointer to parametr of name and type
     */
-    t_vi_param_type setpos(p_vi_param_mn name, t_vi_param_flags f){
+    t_vi_param_type setpos(const p_vi_param_mn name, t_vi_param_flags f){
 
         while(VI_TYPE_UNKNOWN != setpos(name)){
 
@@ -233,7 +233,7 @@ public:
         write one setting and shift pointer
         returns number of vaules (in array case)
     */
-    template <typename T> int append(p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags f = VI_TYPE_P_VAL){
+    template <typename T> int append(const p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags f = VI_TYPE_P_VAL){
 
         if(!name || !val) return -1; //fatal
         if(it >= end) return 0; //the end
@@ -291,7 +291,7 @@ public:
         for(i = 0; (i < st.length) && (i < (u32)len) && ((void *)tmp < (void *)end); i++){
 
             memcpy(val, tmp, vsz);
-            tmp += t_vi_param_type_lut[st.type].sz; val ++;
+            tmp += vsz; val ++;
         }
 
         st.length = i;  //possible length correction
