@@ -19,50 +19,61 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
 
     if(event == vi_ex_io::VI_IO_OK){
 
+        u8 sdg[VI_HLEN()]; rdBuf->get(0, sdg, VI_HLEN());   //copy of rx buf
+        t_vi_exch_dgram hdg; vi_dg_deserialize(&hdg, sdg, VI_HLEN());  //fill dg head
+
         vi_ex_io::callback(event); //nothing for now
 
-        u8 sdg[VI_HLEN()];rdBuf->get(0, sdg, VI_HLEN());   //copy of rx buf
-        t_vi_exch_dgram dg; vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
+        t_vi_exch_dgram *dg = vi_ex_io::preparerx(NULL, hdg.type, hdg.size); //read all packet
+        if(vi_ex_io::VI_IO_OK != vi_ex_io::receive(dg, 0)){
 
-        switch(dg.type){
+            delete[] dg;
+            return;
+        }
 
-            case VI_I_CAP:  //cache remote capabilities
+        callback_rx_new(dg);  //user notification
 
-                if(p_cap) delete[] p_cap; p_cap = NULL;
+        switch(dg->type){
 
-                try {  //encaps. of big allocation
+            case VI_I_CAP: { //cache remote capabilities
 
-                    sz_cap = dg.size;
-                    p_cap = new u8[sz_cap];
-            	} catch(std::bad_alloc& ba){
+                t_vi_param_stream tc(dg->d, dg->size);
+                t_vi_param tp;
 
-                    char inf[128]; snprintf(inf, sizeof(inf), "(!!!)E bad_alloc caught: %s\n", ba.what());
-                    debug(inf);
-                    //assert(1); //while(1);
-            	}
+                while((tp.type = tc.isvalid((int *)&tp.length)) != VI_TYPE_UNKNOWN){  //through all param
 
-                rdBuf->get(VI_HLEN(), (u8 *)p_cap, dg.size);
+                    /*! \todo just only append new cap; do not support update of previously added item
+                     *    cap param. stream backup maybe better? update to std::map<t_vi_param, std::vector> or
+                     *    std::list<t_vi_param>
+                     */
+                    if(0){}
+#define VI_ST_ITEM(def, ctype, idn, sz)\
+                    else if(tp.type == def){\
+                      u8 tv[sz/8 * tp.length];\
+                      if(tc.readnext<ctype>(&tp.name, (ctype *)tv, tp.length, &tp.def_range) < 0) break;\
+                      if(cap.append<ctype>(&tp.name, (ctype *)tv, tp.length, tp.def_range) < 0) break;\
+                    }
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+                }
+
                 break;
-
+            }
             case VI_ECHO_REP:  //add new neigbour to list
             case VI_REG:{    //registration, save remote marker, originator must ensure unique marker
 
-                if((VI_NAME_SZ < dg.size) || (0 == dg.size)) //bad format
+                if((VI_NAME_SZ < dg->size) || (0 == dg->size)) //bad format
                     break;
 
-                t_vi_io_mn lname;
-                rdBuf->get(VI_HLEN(), (u8 *)lname, dg.size);
+                if(VI_ECHO_REP == dg->type){ //VI_ECHO_REP - save new remote node
 
-                if(VI_ECHO_REP == dg.type){ //VI_ECHO_REP - save new remote node
-
-                    std::string rem_nm((char *)lname, dg.size);
-                    std::vector<u8> rem_id(&dg.marker[0], &dg.marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
+                    std::string rem_nm((char *)dg->d, dg->size);
+                    std::vector<u8> rem_id(&dg->marker[0], &dg->marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
                     neighbours[rem_nm] = rem_id;
-                } else if((VI_REG == dg.type) && (0 == memcmp(name, lname, strlen(name)))){ //registration for us?
+                } else if((VI_REG == dg->type) && (0 == memcmp(name, dg->d, strlen(name)))){ //registration for us?
 
-                    t_vi_io_id lmark;
-                    memcpy(lmark, dg.marker, sizeof(lmark));
-                    destination(&lmark);  //from now i do talk only with registrating node
+                    destination((t_vi_io_id *)dg->marker);  //from now i do talk only with registrating node
                 }
                 break;
             }
@@ -73,21 +84,18 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
             case VI_ECHO_REQ:{  //reply with our VI_ECHO_REP
 
                 u8 d[sizeof(t_vi_exch_dgram) + VI_NAME_SZ];
-                t_vi_exch_dgram *dg = preparetx(d, VI_ECHO_REP, strlen(name));
-                memcpy(dg->d, name, strlen(name));
-                vi_ex_io::submit(dg);  //reply immediately (not acked)
+                t_vi_exch_dgram *dg_rep = preparetx(d, VI_ECHO_REP, strlen(name));
+                memcpy(dg_rep->d, name, strlen(name));
+                vi_ex_io::submit(dg_rep);  //reply immediately (not acked)
                 break;
             }
 
-            case VI_ANY:{
-                //silently discarded
-                rdBuf->read(NULL, VI_LEN(&dg));
-                break;
-            }
-
-            default:
+            case VI_ANY:
+            default:  //silently discarded
                 break;
         }
+
+        delete[] dg;
     }
 }
 

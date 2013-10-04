@@ -18,11 +18,13 @@
     VI_TYPE_FLOAT
 */
 typedef enum {
-#define VI_ST_ITEM(def, cnt, type, idn, sz) def = cnt,\
+
+  VI_TYPE_UNKNOWN = 0,
+#define VI_ST_ITEM(def, type, idn, sz) def,\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
-    VI_TYPE_ENDFLAG
+  VI_TYPE_ENDFLAG
 } t_vi_param_type;
 
 
@@ -32,14 +34,6 @@ typedef enum {
 
     helper lut defining symbolic name of type and
     size of one item
-
-    {VI_TYPE_UNKNOWN,   "",  0},
-    {VI_TYPE_BYTE,      "B", 8*sizeof(u8)},
-    {VI_TYPE_CHAR,      "C", 8*sizeof(char)},
-    {VI_TYPE_INTEGER,   "I", 8*sizeof(int)},
-    {VI_TYPE_BOOLEAN,   "b", 1},
-    {VI_TYPE_INTEGER64, "L", 8*sizeof(s64)},
-    {VI_TYPE_FLOAT,     "F", 8*sizeof(double)},
 */
 const struct {
 
@@ -47,7 +41,8 @@ const struct {
     u32 sz;     /**< item bites size */
 } t_vi_param_type_lut[] = {
 
-#define VI_ST_ITEM(def, cnt, type, idn, sz) {idn, sz},\
+    {"unknown",  0},
+#define VI_ST_ITEM(def, type, idn, sz) {idn, sz},\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
@@ -195,7 +190,7 @@ public:
     }
 
     /*!
-        find and set pointer to parametr of name
+        find and set pointer to parametr of name from actual possition!
     */
     t_vi_param_type setpos(const p_vi_param_mn name){
 
@@ -216,16 +211,21 @@ public:
     }
 
     /*!
-        find and set pointer to parametr of name and type
+        look for parametr of name and type
     */
     t_vi_param_type setpos(const p_vi_param_mn name, t_vi_param_flags f){
 
+        it = bgn;
         while(VI_TYPE_UNKNOWN != setpos(name)){
 
             t_vi_param st; deserialize_head(&st);
             if(st.def_range == f)
                 return st.type;
+
+            it += VIEX_PARAM_HEAD();
+            it += st.length * t_vi_param_type_lut[st.type].sz/8;
         }
+        return VI_TYPE_UNKNOWN;
     }
 
     /*!
@@ -244,7 +244,7 @@ public:
 
         //'dynamical identification of type'
         if(0){}
-#define VI_ST_ITEM(def, cnt, ctype, idn, sz)\
+#define VI_ST_ITEM(def, ctype, idn, sz)\
         else if(typeid(T) == typeid(ctype)) st.type = def;\
 
 #include "vi_ex_def_settings_types.inc"
@@ -279,7 +279,7 @@ public:
 
         //sanity check by 'dynamical identification of type'
         if(0){}
-#define VI_ST_ITEM(def, cnt, ctype, idn, sz)\
+#define VI_ST_ITEM(def, ctype, idn, sz)\
         else if((typeid(T) == typeid(ctype)) && (st.type == def)){}\
 
 #include "vi_ex_def_settings_types.inc"

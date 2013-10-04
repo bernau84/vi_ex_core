@@ -117,8 +117,11 @@ public:
     t_vi_exch_dgram *preparetx(u8 *d, t_vi_exch_type t, u32 size = 0, u32 _sess_id = 0){
                 
         if(NULL == d) //!!!if d == NULL than heap is alocated, app has to free it afterwards
-            if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size]))
-                return NULL;
+            if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size])){
+
+              debug("(!!!)E bad_alloc caught: preparetx()\n");
+              return NULL;
+          }
 
         t_vi_exch_dgram *dg = (t_vi_exch_dgram *)d;
         memcpy(dg->marker, mark, VI_MARKER_SZ);
@@ -138,9 +141,13 @@ public:
     */
     t_vi_exch_dgram *preparerx(u8 *d, t_vi_exch_type t =  VI_ANY, u32 size = 0){
 
-        if(NULL == d) //!!!if d == NULL than heap is alocated, app has to free it afterwards
-            if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size]))
+        if(NULL == d) //!!!if d == NULL than heap is alocated, app has to free it afterwards by delete[]
+            if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size])){
+
+                debug("(!!!)E bad_alloc caught: preparerx()\n");
                 return NULL;
+            }
+
 
         t_vi_exch_dgram *dg = (t_vi_exch_dgram *)d;
         memcpy(dg->marker, mark, VI_MARKER_SZ);

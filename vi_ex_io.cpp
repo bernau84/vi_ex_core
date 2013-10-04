@@ -248,7 +248,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
     u8 sdg[VI_HLEN()];
     u32 offs = 0;
 
-    while(timeout > 0){  //wait for whole packet
+    while(timeout >= 0){  //wait for whole packet
 
         if(VI_IO_OK == parser(offs)){
 
