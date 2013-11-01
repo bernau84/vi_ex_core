@@ -14,7 +14,8 @@ HEADERS += \
     vi_ex_io.h \
     vi_ex_hid.h \
     vi_ex_def.h \
-    vi_ex_cell.h
+    vi_ex_cell.h \
+    vi_ex_ter.h
 
 OTHER_FILES += \
     vi_ex_def_settings_types.inc \

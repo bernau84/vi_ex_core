@@ -1,22 +1,10 @@
 
+#include <cstdlib>
 #include "vi_ex_hid.h"
+
 
 #define VIEX_T_2_STR(DEF)   #DEF
 
-/*! \def - creates format string and read values from setting
-    with particular template
-*/
-#define VIEX_T_READNEXT(TYPE, FTNAME)\
-    v = (u8 *) new TYPE[n];\
-    ft = FTNAME;\
-    szof = sizeof(TYPE);\
-    io.readnext<TYPE>(&name, (TYPE *)v, n, &f);\
-
-#define VIEX_T_PRINTOUT(TYPE, FTSTR)\
-    for(int l = 0, i = 0; (m < len) && (i < n); m += l, i++){\
-    l = snprintf(&cmd[m], len-m, FTSTR, *(TYPE *)(v+szof*i));\
-    if(l > (len-m)) l = (len-m);\
-    else if((i+1) < n) cmd[m + l++] = ','; }\
 
 /*! \brief conversion of all pamereter list to text
     syntax: name/'def|min|max|menu1|menu2...'('byte|int|string|float|bool|long')=1,2,3,4,5,6,......
@@ -28,56 +16,56 @@
 */
 int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
 
-    t_vi_param_mn name;
-    t_vi_param_flags f;
-    t_vi_param_type t;
-
-    int m = 0, szof = 0;
+    int m = 0;
     u8 *v = NULL;
     const char *ft = "";
 
+    t_vi_param tmp;
     t_vi_param_stream io((u8 *)p, n);
-    while(((t = io.isvalid(&n)) != VI_TYPE_UNKNOWN) && (m < len)){  //through all param
 
-        switch(t){ //appropriate scan from stream
+    while(((tmp.type = io.isvalid(&tmp.length)) != VI_TYPE_UNKNOWN) && (m < len)){  //through all param
 
+        switch(tmp.type){ //appropriate scan from stream
+
+          /*! macro for formated read from binary stream */
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
+            case def:\
+              v = (u8 *) new ctype[tmp.length];\
+              io.readnext<ctype>(&tmp.name, (ctype *)v, tmp.length, &tmp.def_range);\
+              ft = idn;\
+              break;\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
             default: return 0;
-            case VI_TYPE_BYTE:      VIEX_T_READNEXT(u8, "byte");        break;
-            case VI_TYPE_INTEGER:   VIEX_T_READNEXT(int, "int");        break;
-            case VI_TYPE_BOOLEAN:   VIEX_T_READNEXT(bool, "bool");      break;
-            case VI_TYPE_INTEGER64: VIEX_T_READNEXT(u64, "long");       break;
-            case VI_TYPE_FLOAT:     VIEX_T_READNEXT(double, "float");   break;
-            case VI_TYPE_CHAR:
-                //extra bypass for string
-                n += 1; //for /0
-                VIEX_T_READNEXT(char, "string");
-                v[n-1] = 0; n = 1;  //bypass
-                break;
         }
 
-        switch(f){  //type of param fork
+        switch(tmp.def_range){  //type of param fork
 
-            case VI_TYPE_P_VAL: m += snprintf(&cmd[m], len-m, " %s(%s)=", name, ft);        break;
-            case VI_TYPE_P_DEF: m += snprintf(&cmd[m], len-m, " %s/def(%s)=", name, ft);    break;
-            case VI_TYPE_P_MIN: m += snprintf(&cmd[m], len-m, " %s/min(%s)=", name, ft);    break;
-            case VI_TYPE_P_MAX: m += snprintf(&cmd[m], len-m, " %s/max(%s)=", name, ft);    break;
-            default:    m += snprintf(&cmd[m], len-m, " %s/menu%d(%s)=", name, f, ft);      break;
+            case VI_TYPE_P_VAL: m += snprintf(&cmd[m], len-m, " %s(%s)=", tmp.name, ft);                break;
+            case VI_TYPE_P_DEF: m += snprintf(&cmd[m], len-m, " %s/def(%s)=", tmp.name, ft);            break;
+            case VI_TYPE_P_MIN: m += snprintf(&cmd[m], len-m, " %s/min(%s)=", tmp.name, ft);            break;
+            case VI_TYPE_P_MAX: m += snprintf(&cmd[m], len-m, " %s/max(%s)=", tmp.name, ft);            break;
+            default: m += snprintf(&cmd[m], len-m, " %s/menu%d(%s)=", tmp.name, tmp.def_range, ft);     break;
         }
 
         //array item by item iteration
         if((m > 0) && (len > m))
-            switch(t){
+            switch(tmp.type){
 
+              /*! macro for printing arrays with correct formating */
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
+                case def:\
+                  for(int l = 0, i = 0; (m < len) && (i < (int)tmp.length); m += l, i++){\
+                      l = snprintf(&cmd[m], len-m, prf, *(ctype *)v); v += sz/8;\
+                      if(l > (len-m)) l = (len-m);\
+                      else if(((i+1) < (int)tmp.length) && (def != VI_TYPE_CHAR)) cmd[m + l++] = ',';\
+                  }\
+                  break;\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
                 default: return 0;
-                case VI_TYPE_BYTE:      VIEX_T_PRINTOUT(u8, "%d");      break;
-                case VI_TYPE_INTEGER:   VIEX_T_PRINTOUT(int, "%d");     break;
-                case VI_TYPE_BOOLEAN:   VIEX_T_PRINTOUT(bool, "%d");    break;
-                case VI_TYPE_INTEGER64: VIEX_T_PRINTOUT(u64, "%lld");   break;
-                case VI_TYPE_FLOAT:     VIEX_T_PRINTOUT(double, "%g");  break;
-                case VI_TYPE_CHAR:
-                    //extra bypass for string - we know there is only 1 item
-                    m += snprintf(&cmd[m], len-m, "%s", (char *)v);
-                    break;
             }
 
         if(v) delete[] v;
@@ -87,20 +75,6 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
     return (len > m) ? len : m;
 }
 
-
-/*! \def - scan array of vaules from text
-    and write them to packet
-*/
-#define VIEX_T_WRITENEXT(TYPE, FRMSTR, TMPT)\
-    {\
-        TYPE v[n]; TMPT tmp; \
-        for(int i=0; (1 == sscanf(w_cmd+1, FRMSTR, &tmp)) && (i < n); i++){\
-            v[i] = (TYPE)tmp;\
-            if((NULL == (w_cmd = strchr(w_cmd+1, ','))) || (w_cmd >= end))\
-                break;\
-        }\
-        return VIEX_PARAM_LEN(TYPE, io.append<TYPE>(&name, v, n, f));\
-    }
 
 /*! \brief scans one parametr from text input
     syntax: name/'def|min|max|menu1|menu2...'('byte|string|float|bool|long')=1,2,3,4,5,6,...
@@ -113,32 +87,43 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
 #define HID_TYPE_N  16
 int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
 
-    char name[VIEX_PARAM_NAME_SIZE];
-    char c, s_type[HID_TYPE_N+1], s_dtype[HID_TYPE_N+1] = "";
+    char c = 0, name[VIEX_PARAM_NAME_SIZE];
+    char s_type[HID_TYPE_N+1] = "int";
+    char s_dtype[HID_TYPE_N+1] = "";
     t_vi_param_flags f = VI_TYPE_P_VAL;  //vaule type by default
 
-    const char *w_cmd = cmd;
     const char *end = cmd+len;
 
     t_vi_param_stream io((u8 *)p, n); //iterator init
     if( (4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)) ||
         (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||    //vaule assumed
-        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) ){  //vaule & int assumed
+        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) || //vaule & int assumed
+        (1 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s", name)) ){
 
         if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
         else if(0 == strcmp(s_dtype, "max")) f = VI_TYPE_P_MAX;
         else if(0 == strcmp(s_dtype, "def")) f = VI_TYPE_P_DEF;
         else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
 
-        const char *dlm = (w_cmd = strchr(cmd, '=')); //find equal mark
-        n = 1; while((dlm) && (dlm = strchr(dlm+1, ',')) && (dlm < end)) n += 1; //how many items are there?
+        cmd = strchr(cmd, '='); //find equal mark; if not exists, append empty parametr (length = 0) - in GET command fo example
 
-        if(0 == strcmp(s_type, "byte")) VIEX_T_WRITENEXT(u8, "%u", int)  //C90 doesn't support %hhu
-        else if(0 == strcmp(s_type, "long")) VIEX_T_WRITENEXT(u64, "%u", u32)  //either %Lu, grrr
-        else if(0 == strcmp(s_type, "bool")) VIEX_T_WRITENEXT(bool, "%d", int)   //no compiler supports bool
-        else if(0 == strcmp(s_type, "float")) VIEX_T_WRITENEXT(double, "%lf", double)  //float == double
-        else if(0 == strcmp(s_type, "string")) return VIEX_PARAM_LEN(char, io.append<char>(&name, (char *)(w_cmd+1), strlen(w_cmd), f)); //direct write for string
-        else VIEX_T_WRITENEXT(int, "%d", int);  //int by default
+        /*! macro scan array of vaules from text and write them to packet */
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
+        if(0 == strcmp(s_type, idn)){\
+            int m, M = 0; ctype *v = NULL;\
+            for(m = 0; (cmd != NULL) && (cmd < end); m++){\
+                if(m == M) v = (ctype *)realloc(v, sz/8 * (M += 25));\
+                if((NULL == v) || (1 != sscanf(cmd+1, scf, &v[m]))) break;\
+                cmd = (def != VI_TYPE_CHAR) ? strchr(cmd+1, ',') : cmd+1;\
+            }\
+            M = VIEX_PARAM_LEN(ctype, io.append<ctype>(&name, v, m, f));\
+            if(v) free(v);\
+            return M;\
+        }\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+
     }
 
     return 0;  //error
@@ -185,8 +170,8 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
         break;
 
         case VI_I_CAP:
-        case VI_I_SETUP_GET:
-        case VI_I_SETUP_SET:   //write and read of settings
+        case VI_I_GET_PAR:
+        case VI_I_SET_PAR:   //write and read of settings
 
             n = cf2hi(d->d, d->size, cmd, len);
             len -= n; cmd += n;
@@ -215,8 +200,8 @@ int vi_ex_hid::conv2dt(t_vi_exch_dgram *d, const char *cmd, int len){
 
         //parameters with expected text attachment
         case VI_I:     //echo
-        case VI_I_SETUP_GET:   //setting read and write
-        case VI_I_SETUP_SET:
+        case VI_I_GET_PAR:   //setting read and write
+        case VI_I_SET_PAR:
         case VI_I_CAP:
         {
             char *par = (char *)cmd;

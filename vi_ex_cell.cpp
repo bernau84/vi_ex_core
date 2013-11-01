@@ -20,60 +20,96 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
     if(event == vi_ex_io::VI_IO_OK){
 
         u8 sdg[VI_HLEN()]; rdBuf->get(0, sdg, VI_HLEN());   //copy of rx buf
-        t_vi_exch_dgram hdg; vi_dg_deserialize(&hdg, sdg, VI_HLEN());  //fill dg head
+        t_vi_exch_dgram hdg; hdg.size = 0;
+        vi_dg_deserialize(&hdg, sdg, VI_HLEN());  //fill dg head
 
         vi_ex_io::callback(event); //nothing for now
 
-        t_vi_exch_dgram *dg = vi_ex_io::preparerx(NULL, hdg.type, hdg.size); //read all packet
-        if(vi_ex_io::VI_IO_OK != vi_ex_io::receive(dg, 0)){
+        t_vi_exch_dgram *tx, *rx = vi_ex_io::preparerx(NULL, hdg.type, hdg.size); //read all packet
+        if(vi_ex_io::VI_IO_OK != vi_ex_io::receive(rx, 0)){
 
-            delete[] dg;
+            delete[] rx;
             return;
         }
 
-        callback_rx_new(dg);  //user notification
+        switch(rx->type){
 
-        switch(dg->type){
-
+            case VI_I_GET_PAR:
+            case VI_I_SET_PAR:
+            case VI_I_RET_PAR:
             case VI_I_CAP: { //cache remote capabilities
 
-                t_vi_param_stream tc(dg->d, dg->size);
+                t_vi_param_stream tc_i(rx->d, rx->size);
                 t_vi_param tp;
+                t_vi_param_descr id;
+                t_vi_param_content cont;
 
-                while((tp.type = tc.isvalid((int *)&tp.length)) != VI_TYPE_UNKNOWN){  //through all param
+                while((tp.type = tc_i.isvalid(&tp.length)) != VI_TYPE_UNKNOWN){  //through all param
 
-                    /*! \todo just only append new cap; do not support update of previously added item
-                     *    cap param. stream backup maybe better? update to std::map<t_vi_param, std::vector> or
-                     *    std::list<t_vi_param>
-                     */
                     if(0){}
-#define VI_ST_ITEM(def, ctype, idn, sz)\
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
                     else if(tp.type == def){\
                       u8 tv[sz/8 * tp.length];\
-                      if(tc.readnext<ctype>(&tp.name, (ctype *)tv, tp.length, &tp.def_range) < 0) break;\
-                      if(cap.append<ctype>(&tp.name, (ctype *)tv, tp.length, tp.def_range) < 0) break;\
-                    }
+                      if((cont.length = tc_i.readnext<ctype>(&tp.name, (ctype *)tv, tp.length, &id.def_range)) < 0) break;\
+                      cont.v.assign(&tv[0], &tv[sizeof(tv)]);\
+                    }\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
+                    else continue;
+
+                    cont.type = tp.type;
+                    id.name = std::string(&tp.name[0]);
+                    if((VI_I_RET_PAR == rx->type) || (VI_I_CAP == rx->type)){  /* cache remote paramter */
+
+                        //update
+                        cap[id] = cont;
+                    } else {
+
+                        //inform higher layer
+                        if(VI_I_GET_PAR == rx->type) callback_read_par_request(id, cont);
+                        else if(VI_I_SET_PAR == rx->type) callback_write_par_request(id, cont);
+                        else break;
+
+                        //auto-reply
+                        /*! \todo - chyba; tady musim pouzit fce append<> */
+                        u8 txp[cont.v.size() + VIEX_PARAM_HEAD()];
+                        t_vi_param_stream tc_o(txp, sizeof(txp));
+
+                        if(0){}
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
+                        else if((tp.type == def) && (0 < cont.length)){\
+                          ctype v[cont.length];\
+                          cont.length  = cont.readrange<ctype>(0, cont.length-1, v);\
+                          if((cont.length = tc_o.append<ctype>(&tp.name, v, cont.length, id.def_range)) < 0) break;\
+                        }\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+                        if(!(tx = preparetx(NULL, VI_I_RET_PAR, sizeof(txp)))) break;
+                        memcpy(tx->d, txp, sizeof(txp));
+                        vi_ex_io::submit(tx);
+                        delete[] tx;
+                    }
                 }
 
                 break;
             }
+
             case VI_ECHO_REP:  //add new neigbour to list
             case VI_REG:{    //registration, save remote marker, originator must ensure unique marker
 
-                if((VI_NAME_SZ < dg->size) || (0 == dg->size)) //bad format
+                if((VI_NAME_SZ < rx->size) || (0 == rx->size)) //bad format
                     break;
 
-                if(VI_ECHO_REP == dg->type){ //VI_ECHO_REP - save new remote node
+                if(VI_ECHO_REP == rx->type){ //VI_ECHO_REP - save new remote node
 
-                    std::string rem_nm((char *)dg->d, dg->size);
-                    std::vector<u8> rem_id(&dg->marker[0], &dg->marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
+                    std::string rem_nm((char *)rx->d, rx->size);
+                    std::vector<u8> rem_id(&rx->marker[0], &rx->marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
                     neighbours[rem_nm] = rem_id;
-                } else if((VI_REG == dg->type) && (0 == memcmp(name, dg->d, strlen(name)))){ //registration for us?
+                } else if((VI_REG == rx->type) && (0 == memcmp(name, rx->d, strlen(name)))){ //registration for us?
 
-                    destination((t_vi_io_id *)dg->marker);  //from now i do talk only with registrating node
+                    destination((t_vi_io_id *)rx->marker);  //from now i do talk only with registrating node
                 }
                 break;
             }
@@ -95,12 +131,13 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
                 break;
         }
 
-        delete[] dg;
+        callback_rx_new(rx);  //user notification
+        delete[] rx;
     }
 }
 
 
-bool vi_ex_cell::pair(std::string &remote){
+bool vi_ex_cell::pair(const std::string &remote){
 
     u8 act_mark[VI_MARKER_SZ];
     vi_set_broadcast(&act_mark); //begin with broadcastem

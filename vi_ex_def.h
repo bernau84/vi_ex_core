@@ -41,11 +41,12 @@ typedef enum {
     //unacknowledged data
     VI_BULK = 0x20,  	/**< other; not used */
 
-    //potvrzovana data
+    //acked data
     VI_I = 0x80,      /**< mark of acknowledged data */
-    VI_I_CAP,         /**< capabilities request and reply */
-    VI_I_SETUP_SET,   /**< settings write request; return updated settings */
-    VI_I_SETUP_GET,   /**< settings read request; return actual settings */
+    VI_I_CAP,         /**< capabilities info */
+    VI_I_SET_PAR,   /**< settings write request */
+    VI_I_GET_PAR,   /**< settings read request */
+    VI_I_RET_PAR,   /**< settings read */
 
 //    VI_I_STREAM_ON,   /**< streaming on */
 //    VI_I_STREAM_OFF,  /**< streaming off */
@@ -71,8 +72,9 @@ const struct t_vi_exch_cmd{
     {"{register}",  VI_REG},
     {"{bulk}",      VI_BULK},
     {"CAP",         VI_I_CAP},
-    {"SET",         VI_I_SETUP_SET},  //example: SET Contrast 30
-    {"GET",         VI_I_SETUP_GET},  //example: GET Brightness
+    {"SETP",        VI_I_SET_PAR},  //example: SETP Contrast=30
+    {"GETP",        VI_I_GET_PAR},  //example: GETP Brightness
+    {"RETP",        VI_I_RET_PAR},  //example: RETP Brightness=25
     {"{ack}",       VI_ACK},
     {"UNKNOWN", (t_vi_exch_type)0}  //end mark
 };

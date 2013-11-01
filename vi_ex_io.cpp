@@ -65,8 +65,9 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
 
     if(!n) return VI_IO_FAIL;
 
-    t_vi_exch_dgram dg;
-    while((n - offs) >= VI_MARKER_SZ){      //look for marker
+    u8 sdg[VI_HLEN()+64]; //head and crc controled payload
+    t_vi_exch_dgram dg; preparerx(&dg);
+    while((n - offs) >= VI_HLEN()){      //look for marker
 
         rdBuf->get(offs, (u8 *)dg.marker, VI_MARKER_SZ);
 
@@ -75,7 +76,6 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
             (vi_is_broadcast((p_vi_io_id)mark)))){   //no filter
 
             //have something?
-            u8 sdg[VI_HLEN()+64]; //head and crc controled payload
             rdBuf->get(0, sdg, VI_HLEN()); //copy head from rx queue (no read in fact)
             vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
 
@@ -138,9 +138,8 @@ vi_ex_io::t_vi_io_r vi_ex_io::resend()
     int n = wrBuf->rdAvail();
 
     u8 sdg[VI_HLEN()];
+    t_vi_exch_dgram dg; preparerx(&dg);
     rdBuf->get(0, sdg, VI_HLEN());   //copy head from rx queue (no read in fact)
-
-    t_vi_exch_dgram dg;
     vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
 
     int rn = VI_LEN(&dg);
@@ -163,63 +162,62 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
 
     if(!d) return VI_IO_FAIL;
 
-    d->crc = vi_ex_crc32(d); //fill crc
-    u32 rn = VI_LEN(d);
-    u8 *b = NULL;
-
-    if((0 == memcmp(d->marker, mark, VI_MARKER_SZ)) ||
-            (vi_is_broadcast((p_vi_io_id)d->marker))){  //bradcast or unicast
-
-        b = new u8[rn];
-        vi_dg_serialize(d, b, rn);
-        write((u8 *)b, rn);       //send imediately
-
-        VI_DMSG("tx 0x%x / no%d / %dB", d->type, d->sess_id, d->size);
-    } else {
+    if((0 != memcmp(d->marker, mark, VI_MARKER_SZ)) &&
+            (false == vi_is_broadcast((p_vi_io_id)d->marker))){  //bradcast or unicast
 
         VI_DMSG("(!) rejected 0x%x / no%d", d->type, d->sess_id);
         return VI_IO_FAIL;  //unsuported format
     }
 
+    d->crc = vi_ex_crc32(d); //fill crc
+    u32 rn = VI_LEN(d);
+    u8 *b = new u8[rn];
+    vi_dg_serialize(d, b, rn);
+    write((u8 *)b, rn);       //send imediately
+
+    VI_DMSG("tx 0x%x / no%d / %dB", d->type, d->sess_id, d->size);
+
 #ifdef VI_LINK_ACK
-    if((timeout == 0) || ((d->type & ~VI_ACK) < VI_I)) //chceme potrvzeni?
-#endif // VI_LINK_ACK        
-        return VI_IO_OK;
+    if((timeout != 0) && ((d->type & ~VI_ACK) >= VI_I)){ //support for resend
 
-    timeout = 10 * (timeout / 10); //resend tmo in 10ms dot product
+        wrBuf->read_mark = wrBuf->write_mark; //multiple packet resend is not supported
+        if(wrBuf->size >= rn){
 
-    wrBuf->read_mark = wrBuf->write_mark; //multiple packet resend is not supported
-    if(wrBuf->size >= rn){
+            wrBuf->write((u8 *)b, rn); //fill resend buffer
+        } else {
 
-        wrBuf->write((u8 *)b, rn); //resend
-    } else {
-
-        VI_DMSG("(!) too long for resend 0x%x / no%d", d->type, d->sess_id);  //no resend
-    }
+            VI_DMSG("(!) too long for resend 0x%x / no%d", d->type, d->sess_id);  //no resend
+            timeout = 0;
+        }
+    } else
+        timeout = 0;
+#endif // VI_LINK_ACK
 
     if(b) delete[] b;
+    if(0 == timeout)
+        return VI_IO_OK;
 
     //lock prevents read packet from app side
     bool lo = trylock();
-    t_vi_exch_dgram dg;
     u8 sdg[VI_HLEN()];
-    u32 offs = 0;
+    t_vi_exch_dgram ack; preparerx(&ack);
 
+    u32 offs = 0;
     while(timeout > 0){  //acknowledged data; wait timeout ms (in mutitask slightly longer probably)
 
         if(VI_IO_OK == parser(offs)){
 
             rdBuf->get(0, sdg, VI_HLEN());   //head copy
-            vi_dg_deserialize(&dg, sdg, VI_HLEN());  //fill dg head
+            vi_dg_deserialize(&ack, sdg, VI_HLEN());  //fill dg head
 
-            if((VI_ACK & dg.type) && (d->sess_id == dg.sess_id)){   //ack to last packet?
+            if((VI_ACK & ack.type) && (d->sess_id == ack.sess_id)){   //ack to last packet?
 
-                VI_DMSG("rx ack / no%d", dg.sess_id);
+                VI_DMSG("rx ack / no%d", ack.sess_id);
                 if(lo) unlock();
                 return VI_IO_OK;
             } else {
 
-                offs += VI_LEN(&dg); //it is not our ack; we shift behind and
+                offs += VI_LEN(&ack); //it is not our ack; we shift behind and
             }
         }
 
@@ -228,7 +226,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
             resend();  //zajistuje preposilani paketu
     }
 
-    VI_DMSG("(!) rx ack timeout / no%d", dg.sess_id);
+    VI_DMSG("(!) rx ack timeout / no%d", ack.sess_id);
 
     if(lo) unlock();
     return VI_IO_TIMEOUT; //OK
@@ -244,8 +242,8 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
     }
 
     lock(); //prevent multiple waiting and data stealing
-    t_vi_exch_dgram dg;
     u8 sdg[VI_HLEN()];
+    t_vi_exch_dgram dg; preparerx(&dg);
     u32 offs = 0;
 
     while(timeout >= 0){  //wait for whole packet
@@ -261,7 +259,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                 if((dg.type >= VI_I) && (0 == (dg.type & VI_ACK))){  //paket s potrvzenim (ale ne potrvzovaci paket)
 
                     t_vi_exch_dgram ack;
-                    preparetx((u8 *)&ack, VI_ACK, 0, dg.sess_id);
+                    preparetx(&ack, VI_ACK, 0, dg.sess_id);
                     submit(&ack, 0);
                 }
 #endif // VI_LINK_ACK
@@ -275,7 +273,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::receive(t_vi_exch_dgram *d, int timeout){
                 } else {
                     
                     rdBuf->get(offs, b, sz);  //need (to skip some data); copy datagram
-                    rdBuf->set(offs, (u8 *)"\x0\x0\x0\x0", 4);   //corrup. dgram head to prevent its repeated read
+                    rdBuf->set(offs, (u8 *)"\xFF\xFF\xFF\xFF\xFF", 5);   //corrup. dgram head to prevent its repeated read
                 }
 
                 int bsz = d->size;  //backup of free space in struct

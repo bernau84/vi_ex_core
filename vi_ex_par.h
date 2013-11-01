@@ -20,7 +20,7 @@
 typedef enum {
 
   VI_TYPE_UNKNOWN = 0,
-#define VI_ST_ITEM(def, type, idn, sz) def,\
+#define VI_ST_ITEM(def, type, idn, sz, prf, scf) def,\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
@@ -42,7 +42,7 @@ const struct {
 } t_vi_param_type_lut[] = {
 
     {"unknown",  0},
-#define VI_ST_ITEM(def, type, idn, sz) {idn, sz},\
+#define VI_ST_ITEM(def, type, idn, sz, prf, scf) {idn, sz},\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
@@ -178,7 +178,7 @@ public:
         >0 YES-returns number of element of setings array
         -1 SYNTAX ERROR
     */
-    t_vi_param_type isvalid(int *len = 0){
+    t_vi_param_type isvalid(u32 *len = 0){
 
         if((it < bgn) || (it >= end)) return VI_TYPE_UNKNOWN;
 
@@ -235,7 +235,7 @@ public:
     */
     template <typename T> int append(const p_vi_param_mn name, T *val, int len = 1, t_vi_param_flags f = VI_TYPE_P_VAL){
 
-        if(!name || !val) return -1; //fatal
+        if(!name) return -1; //fatal
         if(it >= end) return 0; //the end
 
         t_vi_param st;
@@ -244,7 +244,7 @@ public:
 
         //'dynamical identification of type'
         if(0){}
-#define VI_ST_ITEM(def, ctype, idn, sz)\
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
         else if(typeid(T) == typeid(ctype)) st.type = def;\
 
 #include "vi_ex_def_settings_types.inc"
@@ -279,7 +279,7 @@ public:
 
         //sanity check by 'dynamical identification of type'
         if(0){}
-#define VI_ST_ITEM(def, ctype, idn, sz)\
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
         else if((typeid(T) == typeid(ctype)) && (st.type == def)){}\
 
 #include "vi_ex_def_settings_types.inc"

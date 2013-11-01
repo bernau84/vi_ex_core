@@ -114,7 +114,7 @@ public:
         @param _sess_id[in] - automated usualy
         @return packet memory or NULL if allocation failed
     */
-    t_vi_exch_dgram *preparetx(u8 *d, t_vi_exch_type t, u32 size = 0, u32 _sess_id = 0){
+    t_vi_exch_dgram *preparetx(void *d, t_vi_exch_type t, u32 size = 0, u32 _sess_id = 0){
                 
         if(NULL == d) //!!!if d == NULL than heap is alocated, app has to free it afterwards
             if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size])){
@@ -139,7 +139,7 @@ public:
         @param t[in] - see t_vi_exch_type
         @param size[in] - size of payload to be allocated
     */
-    t_vi_exch_dgram *preparerx(u8 *d, t_vi_exch_type t =  VI_ANY, u32 size = 0){
+    t_vi_exch_dgram *preparerx(void *d, t_vi_exch_type t = VI_ANY, u32 size = 0){
 
         if(NULL == d) //!!!if d == NULL than heap is alocated, app has to free it afterwards by delete[]
             if(NULL == (d = new u8[sizeof(t_vi_exch_dgram) + size])){
@@ -147,7 +147,6 @@ public:
                 debug("(!!!)E bad_alloc caught: preparerx()\n");
                 return NULL;
             }
-
 
         t_vi_exch_dgram *dg = (t_vi_exch_dgram *)d;
         memcpy(dg->marker, mark, VI_MARKER_SZ);

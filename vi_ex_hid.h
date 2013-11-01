@@ -11,8 +11,9 @@
 /*!
     \class vi_ex_hid
     \brief binary viex protocol with alternative text (human readable) interface
+    std template library free
 */
-class vi_ex_hid : public vi_ex_io {
+class vi_ex_hid : public virtual vi_ex_io {
 
 private:
     virtual int cf2hi(const u8 *p, int n, char *cmd, int len);    /*!< settings -> text */
@@ -25,11 +26,13 @@ public:
     vi_ex_io::t_vi_io_r submit(const char *cmd, int len = VIEX_HID_SP, int timeout = VI_IO_WAITMS_T){
 
         u8 space[VIEX_HID_SP]; //space for text
-        t_vi_exch_dgram *d = vi_ex_io::preparetx(space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
-        conv2dt(d, cmd, (len) ? len : strlen(cmd));
+        t_vi_exch_dgram *d = vi_ex_io::preparetx((t_vi_exch_dgram *)space, VI_ANY, sizeof(space) - sizeof(t_vi_exch_dgram));
+        if(0 == conv2dt(d, cmd, (len) ? len : strlen(cmd)))
+          return vi_ex_io::VI_IO_SYNTAX;
 
-        char info[128];
-        snprintf(info, sizeof(info), "tx cmd \"%s\"\r\n", cmd);
+        char order[64], info[128];
+        sscanf(cmd, "%63[^\r\n]", order);
+        snprintf(info, sizeof(info), "tx cmd \"%s\"\r\n", order);
         debug(info);  //debug printout
 
         return vi_ex_io::submit(d, timeout);
