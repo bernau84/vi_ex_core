@@ -8,7 +8,7 @@ u32 vi_ex_io::cref;  //static has to be declared extra
 #define VI_DMSG(...) \
 { \
     char arg[256]; snprintf(arg, sizeof(arg), __VA_ARGS__); \
-    char msg[256]; snprintf(msg, sizeof(msg), "ref %d: %s\n\r", node_id, arg); \
+    char msg[256]; snprintf(msg, sizeof(msg), "ref %d: %s", node_id, arg); \
     debug(msg); \
 } \
 
@@ -61,7 +61,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
     } while(rn == sizeof(rd));
 
     int n = rdBuf->rdAvail();  //all byte in rx
-    //VI_DMSG("Nod%d Rx avail %dB\n", id, n);
+    if(n) VI_DMSG("avail %dB", n);
 
     if(!n) return VI_IO_FAIL;
 
@@ -117,7 +117,7 @@ vi_ex_io::t_vi_io_r vi_ex_io::parser(u32 offs)
 
         n -= 1;
         rdBuf->read(0, 1); //no header, shift 1byte for another match test
-        //VI_DMSG("(!) rx purged, %dB\n", 1);
+        VI_DMSG("(!) rx purged, %dB", 1);
     }
 
 

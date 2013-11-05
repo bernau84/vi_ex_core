@@ -294,6 +294,16 @@ public:
     bool pair(const std::string &remote);
 
 
+    /*! \brief rename node
+    */
+    void rename(const std::string &local){
+
+      char *p = (char *)&name, *end = &p[sizeof(t_vi_io_mn)];
+      memset(name, 0, sizeof(t_vi_io_mn));
+      for(std::string::const_iterator i=local.begin(); i<local.end(); i++)
+        if(p < end) *p++ = *i;
+    }
+
     /*! \brief contructor
     */
     vi_ex_cell(p_vi_io_mn _name, std::ostream *_p_trace = &std::cout):

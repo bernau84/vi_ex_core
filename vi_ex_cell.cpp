@@ -9,7 +9,7 @@ void vi_ex_cell::debug(const char *msg){
 
         char info[128];
         clock_t tick = clock();
-        snprintf(info, sizeof(info), "%g %s: %s", ((float)tick)/CLOCKS_PER_SEC, name, msg);
+        snprintf(info, sizeof(info), "%g %s: %s\n", ((float)tick)/CLOCKS_PER_SEC, name, msg);
         p_trace->write(info, strlen(info));
     }
 }  
