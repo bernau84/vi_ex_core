@@ -111,6 +111,7 @@ const u32 vi_settings_hlen =
 /*!
     \class t_vi_param_stream
     \brief streamed read and write parameter of viex node settings
+    \todo variable length of param name, only with up-bound
 */
 class t_vi_param_stream {
 

@@ -22,7 +22,7 @@ private:
 
 protected:
     /*! \brief high level callback (only for relevant packet, omits intrenal control packet) */
-    virtual void callback_rx_new(t_vi_exch_dgram *rx){;}
+    virtual void callback_rx_new(t_vi_exch_dgram *){;}
 
 public:
     /*! \brief text command

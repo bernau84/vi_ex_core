@@ -84,7 +84,7 @@ public:
   }
 
   /*! append and serialize values */
-  template <typename T> int append(T *val, u32 n){
+  template <typename T> int append(const T *val, u32 n){
 
       for(u32 i=0; i<n; i++){
 
@@ -92,7 +92,21 @@ public:
           for(u32 j=0; j<sizeof(T); j++) v.push_back(*p++);
       }
 
-      return n;
+      if(0){}
+  #define VI_ST_ITEM(def, dtype, idn, sz, prf, scf)\
+      else if(typeid(dtype) == typeid(T)) type = def;\
+
+  #include "vi_ex_def_settings_types.inc"
+  #undef VI_ST_ITEM
+      else type = VI_TYPE_BYTE;  //unknown threrefore byte array assumed
+
+      return ((length = n));
+  }
+
+  /*! append and serialize value */
+  template <typename T> int append(const T val){
+
+      return append(&val, 1);
   }
 
   t_vi_param_content(t_vi_param_type _type = VI_TYPE_INTEGER, int _length = 0, std::vector<u8> _v = std::vector<u8>()) :
@@ -120,7 +134,6 @@ private:
 
     /*!
         \brief helper method for reading value from capabilities
-        template
     */
     template <typename T> std::vector<T> params(const std::string &name, t_vi_param_flags f){
 
@@ -139,7 +152,6 @@ private:
 
     /*!
         \brief helper method for reading value from capabilities
-        template
     */
     template <typename T> T param(const std::string &name, t_vi_param_flags f){
 
@@ -148,13 +160,13 @@ private:
     }
 
     /*!
-        \brief read or write of parametr
+        \brief read / write remote parametr
         \param action[in] - 0 - read request
             1 - read and wait for reply
             2 - write param request
             3 - write param and wait for reply
     */
-    template <typename T> std::vector<T> setup(const std::string &name, std::vector<T> &v, u8 action){
+    template <typename T> std::vector<T> actualize(const std::string &name, std::vector<T> &v, u8 action){
 
         std::vector<T> confr;
         std::vector<T> d = params<T>(name, VI_TYPE_P_DEF); //default param for size determination
@@ -193,13 +205,13 @@ protected:
     virtual void debug(const char *msg);
 
     /*! \brief high level callback (only for relevant packet, omits internal control packet) */
-    virtual void callback_rx_new(t_vi_exch_dgram *rx){;}
+    virtual void callback_rx_new(t_vi_exch_dgram *){;}
 
     /*! \brief high level callback, t_vi_param_content structure must be updated */
-    virtual void callback_read_par_request(const t_vi_param_descr &id, t_vi_param_content &cont){;}
+    virtual void callback_read_par_request(const t_vi_param_descr &, t_vi_param_content &){;}
 
     /*! \brief high level callback, t_vi_param_content structure must be updated */
-    virtual void callback_write_par_request(const t_vi_param_descr &id, t_vi_param_content &cont){;}
+    virtual void callback_write_par_request(const t_vi_param_descr &, t_vi_param_content &){;}
 public:
 
     /*! \brief returns default param value */
@@ -258,14 +270,35 @@ public:
     /*! \brief change param value and read it again */
     template <typename T> std::vector<T> set(const std::string &name, std::vector<T> &v){
 
-        return setup<T>(name, v, 3);
+        return actualize<T>(name, v, 3);
     }
 
     /*! \brief read actual param value */
     template <typename T> std::vector<T> get(const std::string &name){
 
-        std::vector<T> v(1); //nulovy
-        return setup<T>(name, v, 1);
+        std::vector<T> v(1); //zeroed element?
+        return actualize<T>(name, v, 1);
+    }
+
+    /*! \brief add new parameter visible to second nod
+     *  send appropriate CAPabilities or RETurn packet
+     */
+    template <typename T> bool p_register(t_vi_param_descr id, std::vector<T> &v){
+
+      bool r = false;
+      int N = v.size();
+      t_vi_param_mn lname; id.name.copy(lname, sizeof(lname));  //string to char fixed size array
+      T confv[N]; for(int i = 0; i != N; i++) confv[i] = v[i];  //vector to c-array
+
+      t_vi_exch_dgram *confs = preparetx(NULL, VI_I_CAP, VIEX_PARAM_LEN(T, N));
+      t_vi_param_stream writer(confs->d, confs->size);
+      writer.append<T>(&lname, confv, v.size());
+
+      if(vi_ex_io::submit(confs) == vi_ex_io::VI_IO_OK)
+        r = true;
+
+      delete[] confs;
+      return r;
     }
 
 
@@ -292,7 +325,6 @@ public:
         act as state autonmat using broadcast and unicast echo
     */
     bool pair(const std::string &remote);
-
 
     /*! \brief contructor
     */

@@ -66,22 +66,21 @@ void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
                         cap[id] = cont;
                     } else {
 
-                        //inform higher layer
+                        //inform higher layer and it updates cont value
                         if(VI_I_GET_PAR == rx->type) callback_read_par_request(id, cont);
                         else if(VI_I_SET_PAR == rx->type) callback_write_par_request(id, cont);
                         else break;
 
                         //auto-reply
-                        /*! \todo - chyba; tady musim pouzit fce append<> */
                         u8 txp[cont.v.size() + VIEX_PARAM_HEAD()];
                         t_vi_param_stream tc_o(txp, sizeof(txp));
 
                         if(0){}
 #define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
-                        else if((tp.type == def) && (0 < cont.length)){\
+                        else if(tp.type == def){\
                           ctype v[cont.length];\
-                          cont.length  = cont.readrange<ctype>(0, cont.length-1, v);\
-                          if((cont.length = tc_o.append<ctype>(&tp.name, v, cont.length, id.def_range)) < 0) break;\
+                          if(cont.length) cont.length = cont.readrange<ctype>(0, cont.length-1, v);\
+                          if(tc_o.append<ctype>(&tp.name, v, cont.length, id.def_range) < 0) break;\
                         }\
 
 #include "vi_ex_def_settings_types.inc"

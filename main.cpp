@@ -18,8 +18,6 @@ private:
     std::ofstream *ost;
 
     friend void vi_test_wait10ms(void);
-    std::map<std::string, std::vector<u8> > setup;
-
 protected:
 
     virtual void wait10ms(void){
@@ -27,28 +25,9 @@ protected:
         vi_test_wait10ms();
     }
 
-    virtual void callback_rx_new(t_vi_exch_dgram *rx){
-
-      int tn;
-      string tnm;
+   virtual void callback_rx_new(t_vi_exch_dgram *rx){
 
       switch(rx->type){
-
-        case VI_I_SET_PAR:
-
-          tnm = string(((t_vi_param *)&rx->d[0])->name);
-          setup[tnm] = std::vector<u8>(&rx->d[0], &rx->d[rx->size]); //update
-        break;
-        case VI_I_GET_PAR:{
-
-          tnm = string(((t_vi_param *)&rx->d[0])->name);
-          tn = setup[tnm].size();
-          u8 td[tn + VI_HLEN()];
-          t_vi_exch_dgram *tx = preparetx(td, VI_I_RET_PAR, tn);
-          for(int i=0; i<tn; i++) tx->d[i] = setup[tnm][i];
-          vi_ex_io::submit(tx);  //return
-        }
-        break;
 
         default:
         break;
@@ -79,13 +58,76 @@ protected:
         return 0;
     }
 
+    virtual void callback_read_par_request(const t_vi_param_descr &id, t_vi_param_content &cont){
+
+      cont = setup[id];
+    }
+
+    virtual void callback_write_par_request(const t_vi_param_descr &id, t_vi_param_content &cont){
+
+      setup[id] = cont;
+    }
+
+
 public:
+
+    std::map<t_vi_param_descr, t_vi_param_content> setup;
+
     vi_ex_fileio(std::ifstream *_is, std::ofstream *_os,    //io files simulating physical layer
                  p_vi_io_mn _name = NULL,   //name
                  std::istream *_term_i = NULL) :  //human terminal io
         vi_ex_ter(_name, _term_i), ist(_is), ost(_os){;}
 
     virtual ~vi_ex_fileio(){;}
+
+    void share(){
+
+      for(std::map<t_vi_param_descr, t_vi_param_content>::iterator i = setup.begin();
+          i != setup.end();
+          i++){
+
+          switch(i->second.type){
+
+              /*! \todo - hrozne slozity; kdyz ale jedna vrstva pocita s polema a druha s
+               * vektorem; trochu chyba bylo nahrazovat cap slozitou mapou
+               * ale u retezeneho seznamu to take zustat nemohlo (neni fce pro repalace)
+               *
+               * realne se to ale bude delat jinak - nejspis rucne parametr po parametru
+               **/
+              case VI_TYPE_INTEGER: {
+                  int t[i->second.length];
+                  i->second.readrange(0, i->second.length-1, t);
+                  std::vector<int> v(&t[0], &t[i->second.length]);
+                  p_register(i->first, v);
+              } break;
+              case VI_TYPE_INTEGER64: {
+                  long long int t[i->second.length];
+                  i->second.readrange(0, i->second.length-1, t);
+                  std::vector<long long int> v(&t[0], &t[i->second.length]);
+                  p_register(i->first, v);
+              } break;
+              case VI_TYPE_FLOAT: {
+                  double t[i->second.length];
+                  i->second.readrange(0, i->second.length-1, t);
+                  std::vector<double> v(&t[0], &t[i->second.length]);
+                  p_register(i->first, v);
+              } break;
+              case VI_TYPE_CHAR: {
+                  char t[i->second.length];
+                  i->second.readrange(0, i->second.length-1, t);
+                  std::vector<char> v(&t[0], &t[i->second.length]);
+                  p_register(i->first, v);
+              } break;
+              case VI_TYPE_UNKNOWN:
+              case VI_TYPE_BYTE: {
+                  unsigned char t[i->second.length];
+                  i->second.readrange(0, i->second.length-1, t);
+                  std::vector<unsigned char> v(&t[0], &t[i->second.length]);
+                  p_register(i->first, v);
+              } break;
+           }
+        }
+     }
 };
 
 
@@ -147,53 +189,68 @@ int main(int argc, char *argv[])
     nod1 = (vi_ex_fileio *) new vi_ex_fileio(&p1in, &p1out, (p_vi_io_mn)"ND01", &term_i);
     nod2 = (vi_ex_fileio *) new vi_ex_fileio(&p2in, &p2out, (p_vi_io_mn)"ND02");
 
+    //------------------------connection test----------------------------
     nod1->pair("ND02");
 
-    //capabilities exchange io test
-    //syntax name/'def|menu|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
-    std::list<string> c_init_nod1;
-    std::list<string> c_init_nod2;
+    //------------------------terminal io test---------------------------
+    term_o << "ECHO\r\n";
+    term_o.flush();
+    nod1->refreshcmdln();
 
-//    //terminal io test
-//    term_o << "ECHO\r\n";
-//    term_o << "CAP result/def(int)=70000\r\n";
-//    term_o << "CAP result/min(int)=-100000\r\n";
-//    term_o << "CAP result/max(int)=100000\r\n";
+    //------------------------capabilities exchange io test--------------
+    //    term_o << "CAP result/def(int)=70000\r\n";
+    //    term_o << "CAP result/min(int)=-100000\r\n";
+    //    term_o << "CAP result/max(int)=100000\r\n";
+    //    term_o << "CAP fish/def(string)=--select--\n";
+    //    term_o << "CAP fish/menu1(string)=trout\n";
+    //    term_o << "CAP fish/menu2(string)=eal\n";
+    //    term_o << "CAP fish/menu3(string)=haddock\n";
+    //    term_o << "CAP fish/menu4(string)=salmon\n";
+    //    term_o << "CAP fish/menu5(string)=catfish\n";
+    //    term_o.flush();
+    //    nod1->refreshcmdln();
+    nod1->setup[t_vi_param_descr("result", VI_TYPE_P_DEF)].append((int)70000);
+    nod1->setup[t_vi_param_descr("result", VI_TYPE_P_MIN)].append((int)-100000);
+    nod1->setup[t_vi_param_descr("result", VI_TYPE_P_MAX)].append((int)111111);
+    nod1->setup[t_vi_param_descr("fish", VI_TYPE_P_DEF)].append((char *)"--select--", 11);
+    nod1->setup[t_vi_param_descr("fish", (t_vi_param_flags)1)].append((char *)"trout", 6);
+    nod1->setup[t_vi_param_descr("fish", (t_vi_param_flags)2)].append((char *)"eal", 4);
+    nod1->setup[t_vi_param_descr("fish", (t_vi_param_flags)3)].append((char *)"haddock", 8);
+    nod1->setup[t_vi_param_descr("fish", (t_vi_param_flags)4)].append((char *)"salmon", 7);
+    nod1->setup[t_vi_param_descr("fish", (t_vi_param_flags)5)].append((char *)"catfish", 8);
+    nod1->share();
 
-//    term_o << "CAP fish/def(string)=--select--\n";
-//    term_o << "CAP fish/menu1(string)=trout\n";
-//    term_o << "CAP fish/menu2(string)=eal\n";
-//    term_o << "CAP fish/menu3(string)=haddock\n";
-//    term_o << "CAP fish/menu4(string)=salmon\n";
-//    term_o << "CAP fish/menu5(string)=catfish\n";
+//  //syntax name/'def|menu|min|max'('byte|int|char|float|bool|long')=1,2,3,4,5,6,......
+//    std::list<string> c_init_nod2;
+//    c_init_nod2.push_back("CAP probability/def(float)=0.0\n");
+//    c_init_nod2.push_back("CAP probability/min(float)=0.0\n");
+//    c_init_nod2.push_back("CAP probability/max(float)=0.999999\n");
+//    c_init_nod2.push_back("CAP logmenu/def(byte)=255\n");
+//    c_init_nod2.push_back("CAP logmenu/menu1(byte)=0\n");
+//    c_init_nod2.push_back("CAP logmenu/menu2(byte)=25\n");
+//    c_init_nod2.push_back("CAP logmenu/menu3(byte)=50\n");
+//    c_init_nod2.push_back("CAP logmenu/menu4(byte)=100\n");
+//    c_init_nod2.push_back("CAP logmenu/menu5(byte)=200\n");
+//    c_init_nod2.push_back("CAP primes/def(byte)=1,3,5,7,11,13,17,19,23,29,31,37,41\n");
+//    for(std::list<string>::iterator cs = c_init_nod2.begin(); cs != c_init_nod2.end(); cs++){
+//        /*! \todo - test return values */
+//        nod2->command(*cs);
+//      }
+    nod2->setup[t_vi_param_descr("probability", VI_TYPE_P_DEF)].append((double)0.0);
+    nod2->setup[t_vi_param_descr("probability", VI_TYPE_P_MIN)].append((double)0.1);
+    nod2->setup[t_vi_param_descr("probability", VI_TYPE_P_MAX)].append((double)0.99999999);
+    nod2->setup[t_vi_param_descr("logmenu", VI_TYPE_P_DEF)].append((unsigned char)255);
+    nod2->setup[t_vi_param_descr("logmenu", (t_vi_param_flags)1)].append((unsigned char)0);
+    nod2->setup[t_vi_param_descr("logmenu", (t_vi_param_flags)2)].append((unsigned char)25);
+    nod2->setup[t_vi_param_descr("logmenu", (t_vi_param_flags)3)].append((unsigned char)50);
+    nod2->setup[t_vi_param_descr("logmenu", (t_vi_param_flags)4)].append((unsigned char)100);
+    nod2->setup[t_vi_param_descr("logmenu", (t_vi_param_flags)5)].append((unsigned char)200);
 
-//    term_o.flush();
-//    nod1->refreshcmdln();
+    const unsigned char primes[] = {1,3,5,7,11,13,17,19,23,29,31,37,41};
+    nod2->setup[t_vi_param_descr("primes", VI_TYPE_P_DEF)].append((unsigned char *)primes, sizeof(primes));
+    nod2->share();
 
-    c_init_nod2.push_back("CAP probability/def(float)=0.0\n");
-    c_init_nod2.push_back("CAP probability/min(float)=0.0\n");
-    c_init_nod2.push_back("CAP probability/max(float)=0.999999\n");
-
-    c_init_nod2.push_back("CAP logmenu/def(byte)=255\n");
-    c_init_nod2.push_back("CAP logmenu/menu1(byte)=0\n");
-    c_init_nod2.push_back("CAP logmenu/menu2(byte)=25\n");
-    c_init_nod2.push_back("CAP logmenu/menu3(byte)=50\n");
-    c_init_nod2.push_back("CAP logmenu/menu4(byte)=100\n");
-    c_init_nod2.push_back("CAP logmenu/menu5(byte)=200\n");
-
-    c_init_nod2.push_back("CAP primes/def(byte)=1,3,5,7,11,13,17,19,23,29,31,37,41\n");
-
-    for(std::list<string>::iterator cs = c_init_nod1.begin(); cs != c_init_nod1.end(); cs++){
-        /*! \todo - test return values */
-        nod1->command(*cs);
-      }
-
-    for(std::list<string>::iterator cs = c_init_nod2.begin(); cs != c_init_nod2.end(); cs++){
-        /*! \todo - test return values */
-        nod2->command(*cs);
-      }
-
-    //parametr io test
+    //------------------------parametr io test------------------------
     nod2->command("GETP result");
     nod2->command("GETP result/min");
     nod2->command("GETP result/max");

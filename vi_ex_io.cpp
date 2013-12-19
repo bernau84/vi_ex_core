@@ -8,7 +8,7 @@ u32 vi_ex_io::cref;  //static has to be declared extra
 #define VI_DMSG(...) \
 { \
     char arg[256]; snprintf(arg, sizeof(arg), __VA_ARGS__); \
-    char msg[256]; snprintf(msg, sizeof(msg), "ref %d: %s\n\r", node_id, arg); \
+    char msg[256]; snprintf(msg, sizeof(msg), "\tref %d: %s\n\r", node_id, arg); \
     debug(msg); \
 } \
 
@@ -213,6 +213,9 @@ vi_ex_io::t_vi_io_r vi_ex_io::submit(t_vi_exch_dgram *d, int timeout){
             if((VI_ACK & ack.type) && (d->sess_id == ack.sess_id)){   //ack to last packet?
 
                 VI_DMSG("rx ack / no%d", ack.sess_id);
+                rdBuf->read(0, VI_LEN(&ack));   //.. and shift pointer
+                    //ack is expecting and processed in this case (callback is not necessary)
+
                 if(lo) unlock();
                 return VI_IO_OK;
             } else {

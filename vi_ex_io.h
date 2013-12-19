@@ -69,7 +69,7 @@ protected:
 
     virtual void wait10ms(void){ for(int t=10000; t; t--); } /*!< default waitstate */
     virtual void debug(const char *msg){ fprintf(stderr, "%s", msg); }  /*!< default debug interface */
-    virtual void callback(t_vi_io_r event){;}     /*!< callback function; call with every packet rx */
+    virtual void callback(t_vi_io_r ){;}     /*!< callback function; call with every packet rx */
     
     virtual void lock(){ while(reading)/* wait10ms()*/; reading = true; }
     virtual bool trylock(){ if(reading) return false; reading = true; return true; }
@@ -126,7 +126,7 @@ public:
         t_vi_exch_dgram *dg = (t_vi_exch_dgram *)d;
         memcpy(dg->marker, mark, VI_MARKER_SZ);
         dg->type = t;
-        dg->sess_id = (_sess_id) ? _sess_id : (t >= VI_I) ? sess_id : ++sess_id;
+        dg->sess_id = (_sess_id) ? _sess_id : /*(t >= VI_I) ? sess_id :*/ ++sess_id;
         dg->crc = 0;
         dg->size = size;
         return dg;

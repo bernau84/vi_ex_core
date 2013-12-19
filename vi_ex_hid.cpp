@@ -96,8 +96,9 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
 
     t_vi_param_stream io((u8 *)p, n); //iterator init
     if( (4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)) ||
-        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||    //vaule assumed
-        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) || //vaule & int assumed
+        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^=]=%c", name, s_dtype, &c)) ||
+        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||
+        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) ||
         (1 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s", name)) ){
 
         if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
