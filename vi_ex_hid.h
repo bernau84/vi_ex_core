@@ -32,7 +32,7 @@ public:
 
         char order[64], info[128];
         sscanf(cmd, "%63[^\r\n]", order);
-        snprintf(info, sizeof(info), "tx cmd \"%s\"\r\n", order);
+        snprintf(info, sizeof(info), "tx cmd \"%s\"", order);
         debug(info);  //debug printout
 
         return vi_ex_io::submit(d, timeout);
@@ -46,7 +46,7 @@ public:
         conv2hi(d, cmd, len);
 
         char info[128];
-        snprintf(info, sizeof(info), "rx cmd \"%s\"\r\n", cmd);
+        snprintf(info, sizeof(info), "rx cmd \"%s\"", cmd);
         debug(info);  //debug printout
 
         return ret;

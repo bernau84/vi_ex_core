@@ -8,7 +8,7 @@ u32 vi_ex_io::cref;  //static has to be declared extra
 #define VI_DMSG(...) \
 { \
     char arg[256]; snprintf(arg, sizeof(arg), __VA_ARGS__); \
-    char msg[256]; snprintf(msg, sizeof(msg), "\tref %d: %s\n\r", node_id, arg); \
+    char msg[256]; snprintf(msg, sizeof(msg), "\tref %d: %s", node_id, arg); \
     debug(msg); \
 } \
 
