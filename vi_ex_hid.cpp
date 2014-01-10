@@ -95,37 +95,35 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
     const char *end = cmd+len;
 
     t_vi_param_stream io((u8 *)p, n); //iterator init
-    if( (4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)) ||
-        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^=]=%c", name, s_dtype, &c)) ||
-        (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||
-        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^=]=%c", name, &c)) ||
-        (1 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s", name)) ){
+    if(4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)){;}
+    else if(3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^=/()]/%"DEF2STR(HID_TYPE_N)"[^=]=%c", name, s_dtype, &c)){;}
+    else if(3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^=/(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)){;}
+    else if(2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^=]=%c", name, &c)){;}
+    else return 0;
 
-        if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
-        else if(0 == strcmp(s_dtype, "max")) f = VI_TYPE_P_MAX;
-        else if(0 == strcmp(s_dtype, "def")) f = VI_TYPE_P_DEF;
-        else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
+    if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
+    else if(0 == strcmp(s_dtype, "max")) f = VI_TYPE_P_MAX;
+    else if(0 == strcmp(s_dtype, "def")) f = VI_TYPE_P_DEF;
+    else if(1 == sscanf(s_dtype, "menu%d", &n)) f = (t_vi_param_flags)n;
 
-        cmd = strchr(cmd, '='); //find equal mark; if not exists, append empty parametr (length = 0) - in GET command fo example
+    cmd = strchr(cmd, '='); //find equal mark; if not exists, append empty parametr (length = 0) - in GET command fo example
 
-        /*! macro scan array of vaules from text and write them to packet */
+    /*! macro scan array of vaules from text and write them to packet */
 #define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
-        if(0 == strcmp(s_type, idn)){\
-            int m, M = 0; ctype *v = NULL;\
-            for(m = 0; (cmd != NULL) && (cmd < end); m++){\
-                if(m == M) v = (ctype *)realloc(v, sz/8 * (M += 25));\
-                if((NULL == v) || (1 != sscanf(cmd+1, scf, &v[m]))) break;\
-                cmd = (def != VI_TYPE_CHAR) ? strchr(cmd+1, ',') : cmd+1;\
-            }\
-            M = VIEX_PARAM_LEN(ctype, io.append<ctype>(&name, v, m, f));\
-            if(v) free(v);\
-            return M;\
+    if(0 == strcmp(s_type, idn)){\
+        int m, M = 0; ctype *v = NULL;\
+        for(m = 0; (cmd != NULL) && (cmd < end); m++){\
+            if(m == M) v = (ctype *)realloc(v, sz/8 * (M += 25));\
+            if((NULL == v) || (1 != sscanf(cmd+1, scf, &v[m]))) break;\
+            cmd = (def != VI_TYPE_CHAR) ? strchr(cmd+1, ',') : cmd+1;\
         }\
+        M = VIEX_PARAM_LEN(ctype, io.append<ctype>(&name, v, m, f));\
+        if(v) free(v);\
+        return M;\
+    }\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
-
-    }
 
     return 0;  //error
 }
@@ -206,9 +204,15 @@ int vi_ex_hid::conv2dt(t_vi_exch_dgram *d, const char *cmd, int len){
         case VI_I_SET_PAR:
         case VI_I_CAP:
         {
-            char *par = (char *)cmd;
-            while((*par > 32) && (len > 0)){ par++; len--; }    //move behind command
-            while((*par <= 32) && (len > 0)){ par++; len--; }   //move behind white spaces
+            char par[len+2];
+            while((*cmd > 32) && (len > 0)){ cmd++; len--; }    //move behind command
+            while((*cmd <= 32) && (len > 0)){ cmd++; len--; }   //move behind white spaces
+            int pn = snprintf(par, len, "%s", cmd);
+
+            if(vi_exch_cmd[i].type == VI_I_GET_PAR)
+              if(par[pn-1] != '=') //bypass for simplier parser
+                strcpy(&par[pn], "=?");  //append query suffix
+
             d->size = cf2dt(d->d, d->size, par, len);
         }
         break;

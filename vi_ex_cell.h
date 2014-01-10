@@ -166,7 +166,7 @@ private:
             2 - write param request
             3 - write param and wait for reply
     */
-    template <typename T> std::vector<T> actualize(const std::string &name, std::vector<T> &v, u8 action){
+    template <typename T> std::vector<T> renew(const std::string &name, std::vector<T> &v, u8 action){
 
         std::vector<T> confr;
         std::vector<T> d = params<T>(name, VI_TYPE_P_DEF); //default param for size determination
@@ -274,14 +274,14 @@ public:
     /*! \brief change param value and read it again */
     template <typename T> std::vector<T> set(const std::string &name, std::vector<T> &v){
 
-        return actualize<T>(name, v, 3);
+        return renew<T>(name, v, 3);
     }
 
     /*! \brief read actual param value */
     template <typename T> std::vector<T> get(const std::string &name){
 
         std::vector<T> v(1); //zeroed element?
-        return actualize<T>(name, v, 1);
+        return renew<T>(name, v, 1);
     }
 
     /*! \brief add new parameter visible to second nod
@@ -291,12 +291,13 @@ public:
 
       bool r = false;
       int N = v.size();
-      t_vi_param_mn lname; id.name.copy(lname, sizeof(lname));  //string to char fixed size array
+      t_vi_param_mn lname;
+      snprintf(lname, sizeof(lname), "%s", id.name.c_str()); //string to char fixed size array
       T confv[N]; for(int i = 0; i != N; i++) confv[i] = v[i];  //vector to c-array
 
       t_vi_exch_dgram *confs = preparetx(NULL, VI_I_CAP, VIEX_PARAM_LEN(T, N));
       t_vi_param_stream writer(confs->d, confs->size);
-      writer.append<T>(&lname, confv, v.size());
+      writer.append<T>(&lname, confv, v.size(), id.def_range);
 
       if(vi_ex_io::submit(confs) == vi_ex_io::VI_IO_OK)
         r = true;

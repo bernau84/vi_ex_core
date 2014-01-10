@@ -85,6 +85,7 @@ public:
 
     void share(){
 
+      int n;
       for(std::map<t_vi_param_descr, t_vi_param_content>::iterator i = setup.begin();
           i != setup.end();
           i++){
@@ -99,33 +100,33 @@ public:
                **/
               case VI_TYPE_INTEGER: {
                   int t[i->second.length];
-                  i->second.readrange(0, i->second.length-1, t);
-                  std::vector<int> v(&t[0], &t[i->second.length]);
+                  int n = i->second.readrange(0, i->second.length-1, t);
+                  std::vector<int> v(&t[0], &t[n]);
                   p_register(i->first, v);
               } break;
               case VI_TYPE_INTEGER64: {
                   long long int t[i->second.length];
-                  i->second.readrange(0, i->second.length-1, t);
-                  std::vector<long long int> v(&t[0], &t[i->second.length]);
+                  int n = i->second.readrange(0, i->second.length-1, t);
+                  std::vector<long long int> v(&t[0], &t[n]);
                   p_register(i->first, v);
               } break;
               case VI_TYPE_FLOAT: {
                   double t[i->second.length];
-                  i->second.readrange(0, i->second.length-1, t);
-                  std::vector<double> v(&t[0], &t[i->second.length]);
+                  int n = i->second.readrange(0, i->second.length-1, t);
+                  std::vector<double> v(&t[0], &t[n]);
                   p_register(i->first, v);
               } break;
               case VI_TYPE_CHAR: {
                   char t[i->second.length];
-                  i->second.readrange(0, i->second.length-1, t);
-                  std::vector<char> v(&t[0], &t[i->second.length]);
+                  int n = i->second.readrange(0, i->second.length-1, t);
+                  std::vector<char> v(&t[0], &t[n]);
                   p_register(i->first, v);
               } break;
               case VI_TYPE_UNKNOWN:
               case VI_TYPE_BYTE: {
                   unsigned char t[i->second.length];
-                  i->second.readrange(0, i->second.length-1, t);
-                  std::vector<unsigned char> v(&t[0], &t[i->second.length]);
+                  int n = i->second.readrange(0, i->second.length-1, t);
+                  std::vector<unsigned char> v(&t[0], &t[n]);
                   p_register(i->first, v);
               } break;
            }
@@ -266,18 +267,18 @@ int main(int argc, char *argv[])
     nod2->setup[t_vi_param_descr("primes", VI_TYPE_P_DEF)].append((unsigned char *)primes, sizeof(primes));
     nod2->share();
 
-//    //------------------------parametr io test------------------------
-//    nod2->command("GETP result");
-//    nod2->command("GETP result/min");
-//    nod2->command("GETP result/max");
-//    nod2->command("GETP result/def");
-//    nod2->command("GETP result(string)");
-//    nod2->command("SETP result(double)=-50000");
-//    nod2->command("SETP result(int)=-50000");
-//    nod2->command("SETP result=-500000");
-//    nod2->command("SETP fish(string)=salmon");
-//    nod2->command("SETP fish(string)=carp");
-//    nod2->command("GETP fish");
+    //------------------------parametr io test------------------------
+    nod2->command("GETP result");
+    nod2->command("GETP result/min");
+    nod2->command("GETP result/max");
+    nod2->command("GETP result/def");
+    nod2->command("GETP result(string)");
+    nod2->command("SETP result(double)=-50000");
+    nod2->command("SETP result(int)=-50000");
+    nod2->command("SETP result=-500000");
+    nod2->command("SETP fish(string)=salmon");
+    nod2->command("SETP fish(string)=carp");
+    nod2->command("GETP fish");
 
     nod1->command("SETP probability(float)=0.5");
     nod1->command("SETP probability(float)=-0.5");
@@ -289,28 +290,28 @@ int main(int argc, char *argv[])
     nod1->command("GETP free(string)");
 
     {
-    std::vector<double> range;
-    range = nod1->min<double>("probability");
-    range = nod1->max<double>("probability");
-    range = nod1->step<double>("probability");
+      std::vector<double> range;
+      range = nod1->min<double>("probability");
+      range = nod1->max<double>("probability");
+      range = nod1->step<double>("probability");
     }
 
     {
-    std::vector<u8> range;
-    range = nod1->menudef<u8>("logmenu");
+      std::vector<u8> range;
+      range = nod1->menudef<u8>("logmenu");
     }
 
     {
-    std::vector<int> range;
-    range = nod2->min<int>("result");
-    range = nod2->max<int>("result");
-    range = nod2->step<int>("result");
-    range = nod2->def<int>("result");
+      std::vector<int> range;
+      range = nod2->min<int>("result");
+      range = nod2->max<int>("result");
+      range = nod2->step<int>("result");
+      range = nod2->def<int>("result");
     }
 
     {
-    std::vector<string> range;
-    range = nod2->stringdef("fish");
+      std::vector<string> range;
+      range = nod2->stringdef("fish");
     }
 
     p1in.close(); p1out.close();
