@@ -27,6 +27,7 @@ protected:
 public:
     /*! \brief text command
         \return text response
+        response is explicitly expecting; timeout in another case
     */
     std::string command(const std::string &ord){
 
@@ -54,7 +55,7 @@ public:
               cmd.push_back(c);
             } else {
 
-              vi_ex_ter::command(cmd); //execute
+              vi_ex_hid::submit(cmd.c_str()); //execute
               cmd.clear();
             }
         }

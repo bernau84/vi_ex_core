@@ -17,7 +17,7 @@
 int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
 
     int m = 0;
-    u8 *v = NULL;
+    u8 *vv = NULL, *v = NULL;
     const char *ft = "";
 
     t_vi_param tmp;
@@ -30,7 +30,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
           /*! macro for formated read from binary stream */
 #define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
             case def:\
-              v = (u8 *) new ctype[tmp.length];\
+              v = vv = (u8 *) new ctype[tmp.length];\
               io.readnext<ctype>(&tmp.name, (ctype *)v, tmp.length, &tmp.def_range);\
               ft = idn;\
               break;\
@@ -49,7 +49,7 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
             default: m += snprintf(&cmd[m], len-m, " %s/menu%d(%s)=", tmp.name, tmp.def_range, ft);     break;
         }
 
-        //array item by item iteration
+        //array; item by item iteration
         if((m > 0) && (len > m))
             switch(tmp.type){
 
@@ -68,8 +68,8 @@ int vi_ex_hid::cf2hi(const u8 *p, int n, char *cmd, int len){
                 default: return 0;
             }
 
-        if(v) delete[] v;
-        v = NULL;
+        if(vv) delete[] vv;
+        vv = NULL;
     }
 
     return (len > m) ? len : m;
@@ -98,7 +98,7 @@ int vi_ex_hid::cf2dt(u8 *p, int n, const char *cmd, int len){
     if( (4 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_dtype, s_type, &c)) ||
         (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^/]/%"DEF2STR(HID_TYPE_N)"[^=]=%c", name, s_dtype, &c)) ||
         (3 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^(](%"DEF2STR(HID_TYPE_N)"[^)])=%c", name, s_type, &c)) ||
-        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s=%c", name, &c)) ||
+        (2 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"[^=]=%c", name, &c)) ||
         (1 == sscanf(cmd, "%"DEF2STR(VIEX_PARAM_NAME_SIZE)"s", name)) ){
 
         if(0 == strcmp(s_dtype, "min")) f = VI_TYPE_P_MIN;
@@ -172,7 +172,8 @@ int vi_ex_hid::conv2hi(const t_vi_exch_dgram *d, char *cmd, int len){
 
         case VI_I_CAP:
         case VI_I_GET_PAR:
-        case VI_I_SET_PAR:   //write and read of settings
+        case VI_I_SET_PAR:
+        case VI_I_RET_PAR:   //write / read / return of settings
 
             n = cf2hi(d->d, d->size, cmd, len);
             len -= n; cmd += n;

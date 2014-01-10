@@ -15,124 +15,126 @@ void vi_ex_cell::debug(const char *msg){
 }  
 
 //hook for intern packet types (registration, echo, capabilities)
-void vi_ex_cell::callback(vi_ex_io::t_vi_io_r event){
+void vi_ex_cell::process(){
 
-    if(event == vi_ex_io::VI_IO_OK){
+    t_vi_exch_dgram rxh; vi_ex_io::preparerx(&rxh); //read header
+    if(VI_QUEUE_INVALID_REC == vi_ex_io::ispending(&rxh))
+        return;  //nothing new
 
-        u8 sdg[VI_HLEN()]; rdBuf->get(0, sdg, VI_HLEN());   //copy of rx buf
-        t_vi_exch_dgram hdg; hdg.size = 0;
-        vi_dg_deserialize(&hdg, sdg, VI_HLEN());  //fill dg head
+    t_vi_exch_dgram *tx, *rx = vi_ex_io::preparerx(NULL, rxh.type, rxh.size); //prepare space for whole packet
+    if(vi_ex_io::VI_IO_OK != vi_ex_io::receive(rx, 0)){  //receive immediately
 
-        vi_ex_io::callback(event); //nothing for now
+        delete[] rx;
+        return;
+    }
 
-        t_vi_exch_dgram *tx, *rx = vi_ex_io::preparerx(NULL, hdg.type, hdg.size); //read all packet
-        if(vi_ex_io::VI_IO_OK != vi_ex_io::receive(rx, 0)){
+    switch(rx->type){
 
-            delete[] rx;
-            return;
-        }
+        case VI_I_GET_PAR:
+        case VI_I_SET_PAR:
+        case VI_I_RET_PAR:
+        case VI_I_CAP: { //cache remote capabilities
 
-        switch(rx->type){
+            t_vi_param_stream tc_i(rx->d, rx->size);
+            t_vi_param tp;
+            t_vi_param_descr id;
+            t_vi_param_content cont;
 
-            case VI_I_GET_PAR:
-            case VI_I_SET_PAR:
-            case VI_I_RET_PAR:
-            case VI_I_CAP: { //cache remote capabilities
+            if(0 == rx->size){  //unknown parameter - empty return
 
-                t_vi_param_stream tc_i(rx->d, rx->size);
-                t_vi_param tp;
-                t_vi_param_descr id;
-                t_vi_param_content cont;
+                if(!(tx = preparetx(NULL, VI_I_RET_PAR))) break;
+                vi_ex_io::submit(tx);
+                delete[] tx;
+            }
 
-                while((tp.type = tc_i.isvalid(&tp.length)) != VI_TYPE_UNKNOWN){  //through all param
+            while((tp.type = tc_i.isvalid(&tp.length)) != VI_TYPE_UNKNOWN){  //through all param
+
+                if(0){}
+#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
+                else if(tp.type == def){\
+                  u8 tv[sz/8 * tp.length];\
+                  if((cont.length = tc_i.readnext<ctype>(&tp.name, (ctype *)tv, tp.length, &id.def_range)) < 0) break;\
+                  cont.v.assign(&tv[0], &tv[sizeof(tv)]);\
+                }\
+
+#include "vi_ex_def_settings_types.inc"
+#undef VI_ST_ITEM
+                else continue;
+
+                cont.type = tp.type;
+                id.name = std::string(&tp.name[0]);
+                if((VI_I_RET_PAR == rx->type) || (VI_I_CAP == rx->type)){  /* cache remote paramter */
+
+                    //update
+                    cap[id] = cont;
+                } else {
+
+                    //inform higher layer and it updates cont value
+                    if(VI_I_GET_PAR == rx->type) callback_read_par_request(id, cont);
+                    else if(VI_I_SET_PAR == rx->type) callback_write_par_request(id, cont);
+                    else break;
+
+                    //auto-reply
+                    u8 txp[cont.v.size() + VIEX_PARAM_HEAD()];
+                    t_vi_param_stream tc_o(txp, sizeof(txp));
 
                     if(0){}
 #define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
-                    else if(tp.type == def){\
-                      u8 tv[sz/8 * tp.length];\
-                      if((cont.length = tc_i.readnext<ctype>(&tp.name, (ctype *)tv, tp.length, &id.def_range)) < 0) break;\
-                      cont.v.assign(&tv[0], &tv[sizeof(tv)]);\
+                    else if(cont.type == def){\
+                      ctype v[cont.length];\
+                      if(cont.length) cont.length = cont.readrange<ctype>(0, cont.length-1, v);\
+                      if(tc_o.append<ctype>(&tp.name, v, cont.length, id.def_range) < 0) break;\
                     }\
 
 #include "vi_ex_def_settings_types.inc"
 #undef VI_ST_ITEM
-                    else continue;
-
-                    cont.type = tp.type;
-                    id.name = std::string(&tp.name[0]);
-                    if((VI_I_RET_PAR == rx->type) || (VI_I_CAP == rx->type)){  /* cache remote paramter */
-
-                        //update
-                        cap[id] = cont;
-                    } else {
-
-                        //inform higher layer and it updates cont value
-                        if(VI_I_GET_PAR == rx->type) callback_read_par_request(id, cont);
-                        else if(VI_I_SET_PAR == rx->type) callback_write_par_request(id, cont);
-                        else break;
-
-                        //auto-reply
-                        u8 txp[cont.v.size() + VIEX_PARAM_HEAD()];
-                        t_vi_param_stream tc_o(txp, sizeof(txp));
-
-                        if(0){}
-#define VI_ST_ITEM(def, ctype, idn, sz, prf, scf)\
-                        else if(tp.type == def){\
-                          ctype v[cont.length];\
-                          if(cont.length) cont.length = cont.readrange<ctype>(0, cont.length-1, v);\
-                          if(tc_o.append<ctype>(&tp.name, v, cont.length, id.def_range) < 0) break;\
-                        }\
-
-#include "vi_ex_def_settings_types.inc"
-#undef VI_ST_ITEM
-                        if(!(tx = preparetx(NULL, VI_I_RET_PAR, sizeof(txp)))) break;
-                        memcpy(tx->d, txp, sizeof(txp));
-                        vi_ex_io::submit(tx);
-                        delete[] tx;
-                    }
+                    if(!(tx = preparetx(NULL, VI_I_RET_PAR, sizeof(txp)))) break;
+                    memcpy(tx->d, txp, sizeof(txp));
+                    vi_ex_io::submit(tx);
+                    delete[] tx;
                 }
-
-                break;
             }
 
-            case VI_ECHO_REP:  //add new neigbour to list
-            case VI_REG:{    //registration, save remote marker, originator must ensure unique marker
-
-                if((VI_NAME_SZ < rx->size) || (0 == rx->size)) //bad format
-                    break;
-
-                if(VI_ECHO_REP == rx->type){ //VI_ECHO_REP - save new remote node
-
-                    std::string rem_nm((char *)rx->d, rx->size);
-                    std::vector<u8> rem_id(&rx->marker[0], &rx->marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
-                    neighbours[rem_nm] = rem_id;
-                } else if((VI_REG == rx->type) && (0 == memcmp(name, rx->d, strlen(name)))){ //registration for us?
-
-                    destination((t_vi_io_id *)rx->marker);  //from now i do talk only with registrating node
-                }
-                break;
-            }
-            
-            case VI_BULK: //to do - forward to trace buffer
-                break;
-
-            case VI_ECHO_REQ:{  //reply with our VI_ECHO_REP
-
-                u8 d[sizeof(t_vi_exch_dgram) + VI_NAME_SZ];
-                t_vi_exch_dgram *dg_rep = preparetx(d, VI_ECHO_REP, strlen(name));
-                memcpy(dg_rep->d, name, strlen(name));
-                vi_ex_io::submit(dg_rep);  //reply immediately (not acked)
-                break;
-            }
-
-            case VI_ANY:
-            default:  //silently discarded
-                break;
+            break;
         }
 
-        callback_rx_new(rx);  //user notification
-        delete[] rx;
+        case VI_ECHO_REP:  //add new neigbour to list
+        case VI_REG:{    //registration, save remote marker, originator must ensure unique marker
+
+            if((VI_NAME_SZ < rx->size) || (0 == rx->size)) //bad format
+                break;
+
+            if(VI_ECHO_REP == rx->type){ //VI_ECHO_REP - save new remote node
+
+                std::string rem_nm((char *)rx->d, rx->size);
+                std::vector<u8> rem_id(&rx->marker[0], &rx->marker[VI_MARKER_SZ]); //inicializace iteratory bgn a end
+                neighbours[rem_nm] = rem_id;
+            } else if((VI_REG == rx->type) && (0 == memcmp(name, rx->d, strlen(name)))){ //registration for us?
+
+                destination((t_vi_io_id *)rx->marker);  //from now i do talk only with registrating node
+            }
+            break;
+        }
+
+        case VI_BULK: //to do - forward to trace buffer
+            break;
+
+        case VI_ECHO_REQ:{  //reply with our VI_ECHO_REP
+
+            u8 d[sizeof(t_vi_exch_dgram) + VI_NAME_SZ];
+            t_vi_exch_dgram *dg_rep = preparetx(d, VI_ECHO_REP, strlen(name));
+            memcpy(dg_rep->d, name, strlen(name));
+            vi_ex_io::submit(dg_rep);  //reply immediately (not acked)
+            break;
+        }
+
+        case VI_ANY:
+        default:  //silently discarded
+            break;
     }
+
+    callback_rx_new(rx);  //user notification
+    delete[] rx;
 }
 
 
@@ -209,7 +211,7 @@ bool vi_ex_cell::pair(const std::string &remote){
             break;
         }
 
-        parser();
+        process();
         wait10ms();
     }
 

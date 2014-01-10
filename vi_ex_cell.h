@@ -196,9 +196,6 @@ private:
         return confr;
     }    
 
-    /*! \brief hook for internal bus packet like capabilities, registration, echo, ... */
-    virtual void callback(vi_ex_io::t_vi_io_r event);
-
 protected:
 
     /*! \brief traces plus timestamp */
@@ -213,6 +210,13 @@ protected:
     /*! \brief high level callback, t_vi_param_content structure must be updated */
     virtual void callback_write_par_request(const t_vi_param_descr &, t_vi_param_content &){;}
 public:
+
+
+    /*! \brief hook for internal bus packet like capabilities, registration, echo, ...
+     * emits callback function
+     * call it regurarly or on new rx data for process asynchronous packet
+     */
+    void process();
 
     /*! \brief returns default param value */
     template <typename T> std::vector<T> def(const std::string &name){ return params<T>(name, VI_TYPE_P_DEF); }

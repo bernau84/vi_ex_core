@@ -9,7 +9,9 @@
 
 using namespace std;
 
-void vi_test_wait10ms(void);  //prototyp
+class vi_ex_fileio;
+
+void vi_test_wait10ms(vi_ex_fileio *rs);  //prototyp
 
 class vi_ex_fileio : public vi_ex_ter
 {
@@ -18,11 +20,12 @@ private:
     std::ofstream *ost;
 
     friend void vi_test_wait10ms(void);
+
 protected:
 
     virtual void wait10ms(void){
 
-        vi_test_wait10ms();
+        vi_test_wait10ms(this);
     }
 
    virtual void callback_rx_new(t_vi_exch_dgram *rx){
@@ -130,22 +133,19 @@ public:
      }
 };
 
-
-
-
 vi_ex_fileio *nod1 = NULL;
 vi_ex_fileio *nod2 = NULL;
 
-void vi_test_wait10ms(void){
+void vi_test_wait10ms(vi_ex_fileio *rs){
+
+    if((nod2) && (rs == nod1))
+       nod2->process();
+
+    if((nod1) && (rs == nod2))
+       nod1->process();
 
     clock_t goal;
-
-    if(nod1) nod1->parser();
-    goal = 5 + clock();
-    while (goal > clock());
-
-    if(nod2) nod2->parser();
-    goal = 5 + clock();
+    goal = 10 + clock();
     while (goal > clock());
 }
 
@@ -170,18 +170,27 @@ int main(int argc, char *argv[])
 //        cap[k] = d;
 //      }
 
+    u8 *bt = NULL;
+    for(u8 i=0; i<100; i++){
+
+        if(bt == NULL) bt = (u8 *)new double[i];
+        memset(bt, i, sizeof(double)*i);
+        if(bt) delete[] bt;
+        bt = NULL;
+      }
+
     //onefile is opened as read second as write for 1. node
     //opposite manner for 2. node
     //we have full binary log of communication in log
-    std::ifstream p1in("iotest_wr.bin", std::ifstream::binary);
-    std::ofstream p1out("iotest_rw.bin", std::ofstream::binary);
+    std::ifstream p1in(".\\iotest_wr.bin", std::ifstream::binary);
+    std::ofstream p1out(".\\iotest_rw.bin", std::ofstream::binary);
 
-    std::ifstream p2in("iotest_rw.bin", std::ifstream::binary);
-    std::ofstream p2out("iotest_wr.bin", std::ofstream::binary);
+    std::ifstream p2in(".\\iotest_rw.bin", std::ifstream::binary);
+    std::ofstream p2out(".\\iotest_wr.bin", std::ofstream::binary);
 
     //human interface
-    std::ofstream term_o("hiterminal.txt", std::fstream::binary | std::fstream::trunc);
-    std::ifstream term_i("hiterminal.txt", std::fstream::binary);
+    std::ofstream term_o(".\\hiterminal.txt", std::fstream::binary | std::fstream::trunc);
+    std::ifstream term_i(".\\hiterminal.txt", std::fstream::binary);
     if(!term_i.is_open() || !term_o.is_open())  //terminal io test
         return 0;
 
@@ -194,8 +203,15 @@ int main(int argc, char *argv[])
 
     //------------------------terminal io test---------------------------
     term_o << "ECHO\r\n";
+    term_o << "CAP result/def(int)=70000\r\n";
     term_o.flush();
     nod1->refreshcmdln();
+
+//    term_o.flush();
+//    term_o << "ECHO\r\n";
+//    term_o << "CAP result/def(int)=70000\r\n";
+//    term_o.flush();
+//    nod1->refreshcmdln();  //not worked! bytes are flushed but not synced with input stream
 
     //------------------------capabilities exchange io test--------------
     //    term_o << "CAP result/def(int)=70000\r\n";
@@ -234,7 +250,7 @@ int main(int argc, char *argv[])
 //    c_init_nod2.push_back("CAP primes/def(byte)=1,3,5,7,11,13,17,19,23,29,31,37,41\n");
 //    for(std::list<string>::iterator cs = c_init_nod2.begin(); cs != c_init_nod2.end(); cs++){
 //        /*! \todo - test return values */
-//        nod2->command(*cs);
+//        nod2->submit(*cs);
 //      }
     nod2->setup[t_vi_param_descr("probability", VI_TYPE_P_DEF)].append((double)0.0);
     nod2->setup[t_vi_param_descr("probability", VI_TYPE_P_MIN)].append((double)0.1);
@@ -250,21 +266,21 @@ int main(int argc, char *argv[])
     nod2->setup[t_vi_param_descr("primes", VI_TYPE_P_DEF)].append((unsigned char *)primes, sizeof(primes));
     nod2->share();
 
-    //------------------------parametr io test------------------------
-    nod2->command("GETP result");
-    nod2->command("GETP result/min");
-    nod2->command("GETP result/max");
-    nod2->command("GETP result/def");
-    nod2->command("GETP result(string)");
-    nod2->command("SETP result(double)=-50000");
-    nod2->command("SETP result(int)=-50000");
-    nod2->command("SETP result=-500000");
-    nod2->command("SETP fish=salmon");
-    nod2->command("SETP fish=carp");
-    nod2->command("GETP fish");
+//    //------------------------parametr io test------------------------
+//    nod2->command("GETP result");
+//    nod2->command("GETP result/min");
+//    nod2->command("GETP result/max");
+//    nod2->command("GETP result/def");
+//    nod2->command("GETP result(string)");
+//    nod2->command("SETP result(double)=-50000");
+//    nod2->command("SETP result(int)=-50000");
+//    nod2->command("SETP result=-500000");
+//    nod2->command("SETP fish(string)=salmon");
+//    nod2->command("SETP fish(string)=carp");
+//    nod2->command("GETP fish");
 
-    nod1->command("SETP probability=0.5");
-    nod1->command("SETP probability=-0.5");
+    nod1->command("SETP probability(float)=0.5");
+    nod1->command("SETP probability(float)=-0.5");
     nod1->command("SETP logmenu=50");
     nod1->command("SETP logmenu=1000");
     nod1->command("SETP primes=1001,1003,1009");

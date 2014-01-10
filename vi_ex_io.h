@@ -8,11 +8,14 @@
 /*!
     some viex settings
  */
-#define VI_IO_I_BUF_SZ    ((u32)(2000)) /*! default receiving buffer size */
-#define VI_IO_O_BUF_SZ    ((u32)(2000)) /*! default retransmith buffer size */
+#define VI_QUEUE_N        10             /*! projected size of rx cache */
+#define VI_QUEUE_INVALID_REC  ((u32)-1)  /*! empty record in queue */
+
+#define VI_IO_DGRAM_SZ    1400    /*! maximal io viex datagram size */
+#define VI_IO_I_BUF_SZ    ((u32)(VI_QUEUE_N * VI_IO_DGRAM_SZ)) /*! default receiving buffer size (for X buffers) */
+#define VI_IO_O_BUF_SZ    ((u32)(1          * VI_IO_DGRAM_SZ)) /*! default retransmith buffer size (for 1 buffer) */
 #define VI_IO_RESEND_T    (1000)        /*! resend timeout */
 #define VI_IO_WAITMS_T    (3*VI_IO_RESEND_T) /*! overal timeout for recieve or acknowledge */
-
 /*!
     \def VI_LINK_ACK
     \brief conditional compilation - turn on acknowledging
@@ -20,6 +23,7 @@
     packet is acked while is recived by application layer
  */
 #define VI_LINK_ACK
+
 
 /*!
     \class vi_ex_io
@@ -45,54 +49,88 @@ public:
         VI_IO_FAIL        /*!< general error; no paket */
     };
 
+    enum t_vi_io_f {
+
+        VI_INITED = (1 << 0),       /*!< instanced */
+        VI_PAIRED = (1 << 1),       /*!< uniqu marger negotiated */
+        VI_READWAIT = (1 << 2),     /*!< async receive postponed until previous reading ends */
+        VI_OVERFLOW = (1 << 3)      /*!< inprocessed dgram overwritten */
+    };
+
+
 private:
     static u32 cref;  /*!< reference counter */
 
-    bool reading; /*!< rx queue reading lock */
     u32 sess_id;  /*!< incremental packet id */
     u32 node_id;  /*!< number of node (for debug) */
+    u32 flags;    /*!< indicators t_vi_io_f bitfield*/
 
     u8 *imem;   /*!< internal memory for receiving */
     u8 *omem;   /*!< internal memory for retransmit */
 
+    u32 queuemem[VI_QUEUE_N]; /*!< internal memory for rx packet indexes */
+
+    int       validate(u32 pos, u32 n = (u32)-1, t_vi_exch_dgram *dg = NULL); /*!< test validity of packet inside rx buffer */
+    t_vi_io_r parser();  /*!< single pass parser */
+    t_vi_io_r resend();  /*!< resend last packet if resend time elapsed an no ack received */
+
 protected:
     t_vi_io_id mark;  /*!< see t_vi_exch_dgram::mark */
 
-    t_vi_io_r parser(u32 offs = 0);  /*!< single pass parser */
-    t_vi_io_r resend();  /*!< resend last packet if resend time elapsed an no ack received */
-
     circbuffer<u8> *rdBuf;  /*!< incomming circular buffer */
     circbuffer<u8> *wrBuf;  /*!< outgoing circular buffer */
+    circbuffer<u32> rxQue;  /*!< queue of incomming packet */
 
     virtual int read(u8 *d, u32 size) = 0;   /*!< pure virtual read from interface */
     virtual int write(u8 *d, u32 size) = 0;  /*!< pure virtual write to interface */
 
     virtual void wait10ms(void){ for(int t=10000; t; t--); } /*!< default waitstate */
     virtual void debug(const char *msg){ fprintf(stderr, "%s", msg); }  /*!< default debug interface */
-    virtual void callback(t_vi_io_r ){;}     /*!< callback function; call with every packet rx */
-    
-    virtual void lock(){ while(reading)/* wait10ms()*/; reading = true; }
-    virtual bool trylock(){ if(reading) return false; reading = true; return true; }
-    virtual void unlock(){ reading = false; }
-    virtual bool islocked(){ if(reading) return true; else return false; }
+    //virtual void callback(t_vi_io_r ){;}     /*!< callback function; call with every packet rx */
 
 public:
     /*!<
         \brief test is some new packet is waiting in receive queue
-        @return packet size
+        in asynchronous mode it should be call regularly
+        @return pasition; VI_QUEUE_INVALID_REC if not pending
     */
-    u32 ispending(void){
+    u32 ispending(t_vi_exch_dgram *d = NULL){
 
         //active check rx queue; in asynchronous mode it should be call regularly
-        if(VI_IO_OK != parser())
-            return 0; 
+        parser();
 
-        u8 sdg[VI_HLEN()];
-        rdBuf->get(0, sdg, VI_HLEN());   //copy head from rx queue (no read in fact)
+        if(d == NULL){
 
-        t_vi_exch_dgram dg;
-        vi_dg_deserialize(&dg, sdg, VI_HLEN());
-        return dg.size;
+            t_vi_exch_dgram idg;
+            preparerx(&idg);  //any packet, any size
+            d = &idg;
+        }
+
+        rxQue.overflow = 0;  //trough all buffer
+        rxQue.read_mark = rxQue.write_mark;   //from oldest records
+
+        for(int i = rxQue.read_mark; rxQue.rdAvail() > 0; i = rxQue.read_mark){
+
+            u32 pos = VI_QUEUE_INVALID_REC; rxQue.read(&pos, 1);  //read index + shord rd pointer
+            if(pos == VI_QUEUE_INVALID_REC)   //valid position?
+              continue;
+
+            t_vi_exch_dgram dg; preparerx(&dg);
+            if(0 == validate(pos, rdBuf->size, &dg)){  //packet still ready? (we dont know size, so MAX is assumed)
+
+                if(d->sess_id)  //we want only this concrete packet
+                  if(d->sess_id != dg.sess_id)
+                    continue;
+
+                if((d->type == VI_ANY) || (d->type == dg.type)){  //ten na ktery cekame
+
+                  memcpy(d, &dg, sizeof(t_vi_exch_dgram));
+                  return i;
+                }
+            }
+        }
+
+        return VI_QUEUE_INVALID_REC;
     }
 
     /*!<
@@ -103,6 +141,7 @@ public:
     void destination(p_vi_io_id p2pid){
 
         memcpy(mark, p2pid, sizeof(mark));
+        flags |= VI_PAIRED;
     }
 
     /*!<
